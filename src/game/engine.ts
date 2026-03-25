@@ -23,7 +23,7 @@ import {
   PRODUCER_INTERVAL_MS,
   ROLL_COST_BASE,
   ROLL_COST_MAX,
-  ROLL_COST_PER_WAVE,
+  ROLL_COST_PER_BLOCK_PURCHASED,
   SAFE_HALF_WIDTH,
   SHOOT_INTERVAL_MS,
   SHOOT_RANGE_BASE,
@@ -44,7 +44,7 @@ import {
   START_MONEY,
   TAKE_COST_BASE,
   TAKE_COST_MAX,
-  TAKE_COST_PER_WAVE,
+  TAKE_COST_PER_BLOCK_PURCHASED,
   WAVE_INTERVAL_MS,
   WAVE_START_DELAY_MS,
   WIDTH,
@@ -173,6 +173,8 @@ export class Game {
   private shopFilled = false;
   /** 第一局老虎机必含至少一格射手，避免开局无输出崩盘 */
   private firstRollDone = false;
+  /** 已从当前商店流程中取出的方块数，用于 Roll/取出涨价 */
+  private blocksPurchased = 0;
 
   private enemyHitBaseCooldown = new Map<number, number>();
   private enemyHitPuddingCooldown = new Map<string, number>();
@@ -808,14 +810,14 @@ export class Game {
   private getRollCost(): number {
     return Math.min(
       ROLL_COST_MAX,
-      ROLL_COST_BASE + this.wave * ROLL_COST_PER_WAVE,
+      ROLL_COST_BASE + this.blocksPurchased * ROLL_COST_PER_BLOCK_PURCHASED,
     );
   }
 
   private getTakeCost(): number {
     return Math.min(
       TAKE_COST_MAX,
-      TAKE_COST_BASE + this.wave * TAKE_COST_PER_WAVE,
+      TAKE_COST_BASE + this.blocksPurchased * TAKE_COST_PER_BLOCK_PURCHASED,
     );
   }
 
@@ -838,6 +840,7 @@ export class Game {
     }
     this.shopSlots = [a, b, c];
     this.shopFilled = true;
+    this.blocksPurchased = 0;
     this.updateHud();
   }
 
@@ -853,6 +856,7 @@ export class Game {
     this.money -= cost;
     const kind = this.shopSlots[index]!;
     this.shopSlots.splice(index, 1);
+    this.blocksPurchased += 1;
     if (this.shopSlots.length === 0) {
       this.shopFilled = false;
     }
@@ -992,10 +996,8 @@ export class Game {
     }`;
     this.rollCostEl.textContent = `-${this.getRollCost()}`;
     this.btnRoll.disabled = this.gameOver || this.money < this.getRollCost();
-    /** 费用变化后须重建三格按钮，否则「取出」仍保持加费前的 disabled */
-    if (this.shopFilled) {
-      this.renderShop();
-    }
+    /** 始终刷新商店 DOM：有货时同步按钮与价格；清空时移除残留格子（曾仅在 shopFilled 时 render 导致剩一格不消失） */
+    this.renderShop();
   }
 
   private renderShop(): void {
@@ -1010,6 +1012,11 @@ export class Game {
     this.shopSlots.forEach((kind, index) => {
       const div = document.createElement("div");
       div.className = "slot";
+      const keyNum = index + 1;
+      const badge = document.createElement("span");
+      badge.className = "slot-key";
+      badge.textContent = String(keyNum);
+      badge.title = `快捷键 ${keyNum}`;
       const title = document.createElement("div");
       title.className = `slot-type ${kind}`;
       title.textContent = kindLabel(kind);
@@ -1022,6 +1029,7 @@ export class Game {
         this.money < this.getTakeCost() ||
         !!this.grabConstraint;
       btn.addEventListener("click", () => this.takeFromSlot(index));
+      div.appendChild(badge);
       div.appendChild(title);
       div.appendChild(btn);
       this.slotsEl.appendChild(div);

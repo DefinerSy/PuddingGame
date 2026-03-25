@@ -15,14 +15,13 @@ export const CRANE_HOOK_Y = 100;
 export const CRANE_MOVE_SPEED = 5;
 
 /**
- * 经济：开局宽松（低基础费 + 略多起步钱 + 首局 Roll 必含一格射手）；
- * 随波次提高 Roll/取出价，避免后期费用四位数闲置。
+ * 经济：开局宽松；每从商店**成功取出**一个方块，Roll/取出基础价各涨一档（有上限）。
  */
 export const ROLL_COST_BASE = 16;
 export const TAKE_COST_BASE = 8;
-/** 每完成一波（wave 增加 1）后，Roll 与取出各加的整数费 */
-export const ROLL_COST_PER_WAVE = 2;
-export const TAKE_COST_PER_WAVE = 1;
+/** 每买过 1 个方块后，下次 Roll / 单次取出各加的整数费 */
+export const ROLL_COST_PER_BLOCK_PURCHASED = 2;
+export const TAKE_COST_PER_BLOCK_PURCHASED = 1;
 export const ROLL_COST_MAX = 48;
 export const TAKE_COST_MAX = 22;
 export const START_MONEY = 38;
