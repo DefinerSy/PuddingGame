@@ -34,6 +34,8 @@ npm run preview
 
 可在 `src/game/config.ts` 中调整费用、射速、射程高度加成、波次间隔等。
 
+平衡思路简述：被动收入保证无生产者也能在约 1 分钟内完成首次 Roll+取货；首波前有短准备时间；敌人数量每 4 波每侧 +1，生命按波次缓慢指数成长；基地生命与敌人啃咬伤害略作缓冲，避免两三只同时贴脸瞬间崩盘。
+
 ## GitHub Pages
 
 1. 仓库 **Settings → Pages**：**Build and deployment** 的 **Source** 选 **GitHub Actions**。

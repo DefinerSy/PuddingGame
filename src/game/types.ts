@@ -10,4 +10,5 @@ export interface PuddingData {
 
 export interface EnemyData {
   hp: number;
+  maxHp: number;
 }

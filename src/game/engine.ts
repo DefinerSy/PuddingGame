@@ -6,10 +6,12 @@ import {
   CRANE_X_MAX,
   CRANE_X_MIN,
   DEFENDER_HP,
+  ENEMIES_COUNT_SCALE_EVERY,
   ENEMIES_PER_SIDE_BASE,
   ENEMY_DAMAGE,
   ENEMY_DAMAGE_TO_PUDDING,
   ENEMY_HP,
+  ENEMY_HP_WAVE_MULT,
   ENEMY_SPEED,
   ENEMY_EYE_PUDDING_RANGE,
   EYE_BLINK_DURATION_MS,
@@ -26,12 +28,16 @@ import {
   SHOOT_INTERVAL_MS,
   SHOOT_RANGE_BASE,
   SHOOT_RANGE_PER_HEIGHT,
+  SHOOTER_HP,
+  BULLET_DAMAGE,
   PASSIVE_INCOME_PER_MINUTE,
+  PRODUCER_BLOCK_HP,
   PUDDING_EYE_ENEMY_RANGE,
   PUDDING_EYE_NEIGHBOR_RANGE,
   START_MONEY,
   TAKE_COST,
   WAVE_INTERVAL_MS,
+  WAVE_START_DELAY_MS,
   WIDTH,
 } from "./config";
 import type { BlockKind, EnemyData, PuddingData } from "./types";
@@ -120,7 +126,7 @@ export class Game {
   private passiveIncomeFrac = 0;
   private baseHp = BASE_MAX_HP;
   private wave = 0;
-  private waveTimer = WAVE_INTERVAL_MS - 4000;
+  private waveTimer = WAVE_INTERVAL_MS - WAVE_START_DELAY_MS;
   private gameOver = false;
 
   private shopSlots: BlockKind[] = [];
@@ -385,7 +391,7 @@ export class Game {
     Composite.remove(this.world, bullet);
     const data = enemy.plugin.puddingEnemy as EnemyData | undefined;
     if (!data) return;
-    const dmg = (bullet.plugin.bulletDmg as number) ?? 12;
+    const dmg = (bullet.plugin.bulletDmg as number) ?? BULLET_DAMAGE;
     data.hp -= dmg;
     if (data.hp <= 0) {
       Composite.remove(this.world, enemy);
@@ -552,7 +558,7 @@ export class Game {
         },
       },
     );
-    bullet.plugin.bulletDmg = 14;
+    bullet.plugin.bulletDmg = BULLET_DAMAGE;
     Body.setVelocity(bullet, {
       x: dir.x * 12,
       y: dir.y * 12,
@@ -577,7 +583,9 @@ export class Game {
     if (this.waveTimer < WAVE_INTERVAL_MS) return;
     this.waveTimer = 0;
     this.wave += 1;
-    const n = ENEMIES_PER_SIDE_BASE + Math.floor(this.wave / 3);
+    const n =
+      ENEMIES_PER_SIDE_BASE +
+      Math.floor(this.wave / ENEMIES_COUNT_SCALE_EVERY);
     for (let i = 0; i < n; i++) {
       this.spawnEnemy(40 + i * 18, true);
       this.spawnEnemy(WIDTH - 40 - i * 18, false);
@@ -594,7 +602,12 @@ export class Game {
         mask: CAT_GROUND | CAT_BLOCK | CAT_BASE | CAT_BULLET,
       },
     });
-    body.plugin.puddingEnemy = { hp: ENEMY_HP } satisfies EnemyData;
+    const maxHp =
+      ENEMY_HP * ENEMY_HP_WAVE_MULT ** Math.max(0, this.wave - 1);
+    body.plugin.puddingEnemy = {
+      hp: maxHp,
+      maxHp,
+    } satisfies EnemyData;
     Body.setVelocity(body, { x: fromLeft ? ENEMY_SPEED : -ENEMY_SPEED, y: 0 });
     Composite.add(this.world, body);
   }
@@ -713,7 +726,7 @@ export class Game {
   private createPuddingBody(kind: BlockKind, x: number, y: number): Matter.Body {
     let w = 48;
     let h = 40;
-    let maxHp = 60;
+    let maxHp = SHOOTER_HP;
     if (kind === "defender") {
       w = 58;
       h = 46;
@@ -722,7 +735,7 @@ export class Game {
     if (kind === "producer") {
       w = 46;
       h = 42;
-      maxHp = 70;
+      maxHp = PRODUCER_BLOCK_HP;
     }
 
     const body = Bodies.rectangle(x, y, w, h, {
@@ -876,7 +889,7 @@ export class Game {
         this.drawBodyRect(ctx, body);
         const ed = body.plugin.puddingEnemy as EnemyData | undefined;
         if (ed) {
-          const t = ed.hp / ENEMY_HP;
+          const t = ed.hp / (ed.maxHp > 0 ? ed.maxHp : ENEMY_HP);
           ctx.fillStyle = "#fca5a5";
           ctx.fillRect(body.position.x - 18, body.position.y - 28, 36 * t, 3);
         }
