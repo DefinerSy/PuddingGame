@@ -921,25 +921,23 @@ export class Game {
     if (basePill) {
       pulseElement(basePill as HTMLElement, "fx-base-hit", 380);
     }
-    if (this.statCoinsPill) {
-      const r = this.baseBody.bounds;
-      const cx = (r.min.x + r.max.x) / 2;
-      const cy = r.min.y - 8;
-      const scr = gameToScreen(this.canvas, cx, cy, {
-        viewScale: this.viewScale,
-        viewOffsetX: this.viewOffsetX,
-        viewOffsetY: this.viewOffsetY,
-        worldHeight: this.getWorldHeight(),
-      });
-      spawnFloatText(
-        this.fxOverlay,
-        scr.x,
-        scr.y,
-        `-${dmg}`,
-        "fx-base-dmg",
-        700,
-      );
-    }
+    const r = this.baseBody.bounds;
+    const cx = (r.min.x + r.max.x) / 2;
+    const cy = r.min.y - 8;
+    const scr = gameToScreen(this.canvas, cx, cy, {
+      viewScale: this.viewScale,
+      viewOffsetX: this.viewOffsetX,
+      viewOffsetY: this.viewOffsetY,
+      worldHeight: this.getWorldHeight(),
+    });
+    spawnFloatText(
+      this.fxOverlay,
+      scr.x,
+      scr.y,
+      `-${dmg}`,
+      "fx-base-dmg",
+      700,
+    );
     if (this.baseHp <= 0) {
       this.baseHp = 0;
       this.gameOver = true;
