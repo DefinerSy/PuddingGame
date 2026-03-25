@@ -215,7 +215,12 @@ export class Game {
     if (!ctx) throw new Error("2d context");
     this.ctx = ctx;
 
-    this.engine = Engine.create({ enableSleeping: true });
+    this.engine = Engine.create({
+      enableSleeping: true,
+      positionIterations: 12,
+      velocityIterations: 10,
+      constraintIterations: 4,
+    });
     this.world = this.engine.world;
     this.engine.gravity.y = 1;
 
@@ -263,6 +268,7 @@ export class Game {
     this.bindCollisions();
 
     Events.on(this.engine, "beforeUpdate", () => this.onBeforeUpdate());
+    Events.on(this.engine, "afterUpdate", () => this.clampPuddingsAboveGround());
   }
 
   start(): void {
@@ -522,6 +528,32 @@ export class Game {
       this.updateHud();
     }
     Composite.remove(this.world, p);
+  }
+
+  /** 防止大刚体旋转时 SAT 迭代不足而穿入地面（用顶点检测，不用 AABB） */
+  private clampPuddingsAboveGround(): void {
+    if (this.gameOver) return;
+    const groundTop = GROUND_Y;
+    const slop = 1.2;
+    const bodies = Composite.allBodies(this.world);
+    for (const body of bodies) {
+      if (body.label !== LABEL_PUDDING || body.isStatic) continue;
+      const verts = body.vertices;
+      if (!verts.length) continue;
+      let maxY = verts[0]!.y;
+      for (let i = 1; i < verts.length; i++) {
+        const y = verts[i]!.y;
+        if (y > maxY) maxY = y;
+      }
+      if (maxY <= groundTop - slop) continue;
+      const dy = groundTop - slop - maxY;
+      Body.translate(body, { x: 0, y: dy });
+      Body.setVelocity(body, {
+        x: body.velocity.x * 0.99,
+        y: Math.min(0, body.velocity.y),
+      });
+      Body.setAngularVelocity(body, body.angularVelocity * 0.94);
+    }
   }
 
   private queuePerfectMerge(a: Matter.Body, b: Matter.Body): void {
