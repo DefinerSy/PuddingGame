@@ -116,3 +116,7 @@ export const MERGE_MIN_HORIZONTAL_OVERLAP_FRAC = 0.42;
 export const MERGE_POWER_BASE = 2.5;
 /** 合并层数上限（由多个单体堆成） */
 export const MERGE_MAX_STACK_DEPTH = 12;
+/** 合体射手最多同时发射的子弹数 */
+export const MERGE_MAX_PROJECTILES = 8;
+/** 多发弹道扇形半角（弧度） */
+export const MERGE_MULTI_SHOT_SPREAD_RAD = 0.14;

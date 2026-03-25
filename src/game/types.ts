@@ -16,8 +16,13 @@ export interface PuddingData {
   idlePhase: number;
   /** 由几次合并计数的单体层数，1=普通块 */
   stackDepth: number;
-  /** 相对单体的功能倍率（≥2 时为完美合并体） */
+  /** 防御者合体：耐啃倍率；射手/生产者合体时与射程或产费倍率对齐 */
   powerMult: number;
+  /** 射手合体：基础射程倍率（攻速不变，多发弹道） */
+  mergeRangeMul: number;
+  mergeProjectileCount: number;
+  /** 生产者合体：单次产费倍率（间隔不变） */
+  mergeProducerGainMul: number;
   /** 绘制用固定局部宽高（不倒翁时 AABB 会变，此值与物理外形一致） */
   displayW: number;
   displayH: number;

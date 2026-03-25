@@ -31,6 +31,8 @@ import {
   MERGE_MAX_ANGLE_RAD,
   MERGE_MAX_STACK_DEPTH,
   MERGE_MIN_HORIZONTAL_OVERLAP_FRAC,
+  MERGE_MAX_PROJECTILES,
+  MERGE_MULTI_SHOT_SPREAD_RAD,
   MERGE_POWER_BASE,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
@@ -344,6 +346,9 @@ export class Game {
     });
     Body.setPosition(this.hook, { x: this.craneX, y: this.hookY });
 
+    /** 吊机上移 hookLift：方块应随地面下移 (delta)，再抵消挂钩上移，净位移 -(delta - hookLift) */
+    const hookLift = BASE_UPGRADE_HOOK_LIFT;
+    const dyBlocks = -(delta - hookLift);
     const bodies = Composite.allBodies(this.world);
     for (const b of bodies) {
       if (
@@ -353,7 +358,7 @@ export class Game {
       ) {
         continue;
       }
-      Body.translate(b, { x: 0, y: -delta });
+      Body.translate(b, { x: 0, y: dyBlocks });
     }
 
     this.applyViewParams();
@@ -596,6 +601,11 @@ export class Game {
         data.stackDepth = 1;
         data.powerMult = 1;
       }
+      if (data.mergeRangeMul === undefined) {
+        data.mergeRangeMul = 1;
+        data.mergeProjectileCount = 1;
+        data.mergeProducerGainMul = 1;
+      }
       if (data.displayW === undefined || data.displayH === undefined) {
         const bw = body.bounds.max.x - body.bounds.min.x;
         const bh = body.bounds.max.y - body.bounds.min.y;
@@ -762,8 +772,24 @@ export class Game {
 
     const mb = db.powerMult ?? 1;
     const mt = dt.powerMult ?? 1;
-    const powerMult = MERGE_POWER_BASE * (mb + mt) * 0.5;
     const stackDepth = sb + st;
+    const mergeScale = MERGE_POWER_BASE * (mb + mt) * 0.5;
+
+    let powerMult = 1;
+    let mergeRangeMul = 1;
+    let mergeProjectileCount = 1;
+    let mergeProducerGainMul = 1;
+    if (db.kind === "defender") {
+      powerMult = mergeScale;
+    } else if (db.kind === "shooter") {
+      mergeRangeMul = mergeScale;
+      mergeProjectileCount = Math.min(
+        MERGE_MAX_PROJECTILES,
+        Math.max(1, Math.round(mergeScale)),
+      );
+    } else if (db.kind === "producer") {
+      mergeProducerGainMul = mergeScale;
+    }
 
     const mergedW = Math.max(botW, topW);
     const minY = top.bounds.min.y;
@@ -803,6 +829,9 @@ export class Game {
       idlePhase: Math.random() * Math.PI * 2,
       stackDepth,
       powerMult,
+      mergeRangeMul,
+      mergeProjectileCount,
+      mergeProducerGainMul,
       displayW: mergedW,
       displayH: mergedH,
     };
@@ -877,8 +906,8 @@ export class Game {
     if (now - last < 450) return;
     this.enemyHitPuddingCooldown.set(key, now);
 
-    const pm = data.powerMult ?? 1;
-    data.hp -= chip / pm;
+    const tank = data.kind === "defender" ? (data.powerMult ?? 1) : 1;
+    data.hp -= chip / tank;
     if (data.hp <= 0) {
       this.detachAndRemovePudding(pud);
     }
@@ -943,14 +972,12 @@ export class Game {
       const data = body.plugin.pudding as PuddingData | undefined;
       if (!data) continue;
 
-      const pm = data.powerMult ?? 1;
-
       if (data.kind === "producer") {
         data.produceAccumulator += dt;
-        const prodInterval = PRODUCER_INTERVAL_MS / pm;
-        if (data.produceAccumulator >= prodInterval) {
+        if (data.produceAccumulator >= PRODUCER_INTERVAL_MS) {
           data.produceAccumulator = 0;
-          const gain = Math.max(1, Math.round(PRODUCER_AMOUNT * pm));
+          const gainMul = data.mergeProducerGainMul ?? 1;
+          const gain = Math.max(1, Math.round(PRODUCER_AMOUNT * gainMul));
           this.money += gain;
           this.updateHud();
           this.showProducerIncomeFx(body, gain);
@@ -959,8 +986,7 @@ export class Game {
 
       if (data.kind === "shooter") {
         data.shootAccumulator += dt;
-        const shootEvery = SHOOT_INTERVAL_MS / pm;
-        if (data.shootAccumulator >= shootEvery) {
+        if (data.shootAccumulator >= SHOOT_INTERVAL_MS) {
           data.shootAccumulator = 0;
           this.tryShoot(body, data);
         }
@@ -974,49 +1000,63 @@ export class Game {
   }
 
   private tryShoot(body: Matter.Body, data: PuddingData): void {
-    const pm = data.powerMult ?? 1;
+    const rangeMul = data.mergeRangeMul ?? 1;
     const range =
-      SHOOT_RANGE_BASE * pm + this.heightBonus(body) * SHOOT_RANGE_PER_HEIGHT;
-    let best: Matter.Body | null = null;
-    let bestD = range + 1;
+      SHOOT_RANGE_BASE * rangeMul +
+      this.heightBonus(body) * SHOOT_RANGE_PER_HEIGHT;
+    const n = Math.max(1, Math.round(data.mergeProjectileCount ?? 1));
     const bodies = Composite.allBodies(this.world);
-    for (const other of bodies) {
-      if (other.label !== LABEL_ENEMY) continue;
-      const d = Matter.Vector.magnitude(
-        Matter.Vector.sub(other.position, body.position),
-      );
-      if (d <= range && d < bestD) {
-        bestD = d;
-        best = other;
-      }
-    }
-    if (!best) return;
+    const enemies = bodies.filter((b) => b.label === LABEL_ENEMY);
+    if (enemies.length === 0) return;
 
-    const dir = Matter.Vector.normalise(
-      Matter.Vector.sub(best.position, body.position),
-    );
-    const bullet = Bodies.circle(
-      body.position.x + dir.x * 28,
-      body.position.y + dir.y * 28,
-      6,
-      {
-        label: LABEL_BULLET,
-        frictionAir: 0,
-        restitution: 0,
-        density: 0.001,
-        collisionFilter: {
-          category: CAT_BULLET,
-          mask: CAT_ENEMY,
+    const used = new Set<number>();
+    for (let i = 0; i < n; i++) {
+      let best: Matter.Body | null = null;
+      let bestD = range + 1;
+      for (const other of enemies) {
+        if (used.has(other.id)) continue;
+        const d = Matter.Vector.magnitude(
+          Matter.Vector.sub(other.position, body.position),
+        );
+        if (d <= range && d < bestD) {
+          bestD = d;
+          best = other;
+        }
+      }
+      if (!best) break;
+      used.add(best.id);
+
+      let dir = Matter.Vector.normalise(
+        Matter.Vector.sub(best.position, body.position),
+      );
+      if (n > 1) {
+        const t =
+          (i - (n - 1) / 2) * MERGE_MULTI_SHOT_SPREAD_RAD;
+        dir = Matter.Vector.rotate(dir, t);
+      }
+      const bullet = Bodies.circle(
+        body.position.x + dir.x * 28,
+        body.position.y + dir.y * 28,
+        6,
+        {
+          label: LABEL_BULLET,
+          frictionAir: 0,
+          restitution: 0,
+          density: 0.001,
+          collisionFilter: {
+            category: CAT_BULLET,
+            mask: CAT_ENEMY,
+          },
         },
-      },
-    );
-    bullet.plugin.bulletDmg = BULLET_DAMAGE * (data.powerMult ?? 1);
-    Body.setVelocity(bullet, {
-      x: dir.x * 12,
-      y: dir.y * 12,
-    });
-    bullet.plugin.lifeMs = 2200;
-    Composite.add(this.world, bullet);
+      );
+      bullet.plugin.bulletDmg = BULLET_DAMAGE;
+      Body.setVelocity(bullet, {
+        x: dir.x * 12,
+        y: dir.y * 12,
+      });
+      bullet.plugin.lifeMs = 2200;
+      Composite.add(this.world, bullet);
+    }
   }
 
   private tickEnemies(): void {
@@ -1237,6 +1277,9 @@ export class Game {
       idlePhase: Math.random() * Math.PI * 2,
       stackDepth: 1,
       powerMult: 1,
+      mergeRangeMul: 1,
+      mergeProjectileCount: 1,
+      mergeProducerGainMul: 1,
       displayW: w,
       displayH: h,
     };
