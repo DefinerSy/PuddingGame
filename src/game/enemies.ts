@@ -59,6 +59,17 @@ export const ENEMY_KIND_DEFS: Record<EnemyKind, EnemyKindDef> = {
     density: 0.0019,
     frictionAir: 0.014,
   },
+  /** 每 5 波一只，走得较慢、略肉，击杀掉宝箱 */
+  carrier: {
+    hpMul: 1.35,
+    speedMul: 0.62,
+    damageToBase: 8,
+    damageToPudding: 5,
+    w: 44,
+    h: 46,
+    density: 0.0024,
+    frictionAir: 0.022,
+  },
 };
 
 /** 与旧版小兵脚底对齐：中心 y = GROUND_Y - 30 - h/2 */
@@ -113,5 +124,6 @@ export function createEnemyPluginData(
     damageToPudding: def.damageToPudding,
     displayW: def.w,
     displayH: def.h,
+    dropsChest: kind === "carrier",
   };
 }

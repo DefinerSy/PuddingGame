@@ -34,6 +34,19 @@ import {
   MERGE_MAX_PROJECTILES,
   MERGE_MULTI_SHOT_SPREAD_RAD,
   MERGE_POWER_BASE,
+  BONUS_BASE_DAMAGE_TAKEN_MUL,
+  BONUS_DEFENDER_CHIP_TAKEN_MUL,
+  BONUS_DEFENDER_HP_MUL,
+  BONUS_PASSIVE_INCOME_MUL,
+  BONUS_PRODUCER_GAIN_MUL,
+  BONUS_PRODUCER_INTERVAL_MUL,
+  BONUS_SHOOTER_DMG_MUL,
+  BONUS_SHOOTER_INTERVAL_MUL,
+  BONUS_SHOP_COST_SUB,
+  CHEST_BOX_H,
+  CHEST_BOX_W,
+  CHEST_CARRIER_WAVE_EVERY,
+  CHEST_LIFETIME_MS,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
   ROLL_COST_BASE,
@@ -65,16 +78,24 @@ import {
   WIDTH,
   HEIGHT,
 } from "./config";
+import { BONUS_UI, pickThreeBonuses } from "./bonuses";
 import {
   createEnemyPluginData,
   enemySpawnCenterY,
   ENEMY_KIND_DEFS,
   pickEnemyKind,
 } from "./enemies";
-import type { BlockKind, EnemyData, PuddingData } from "./types";
+import type {
+  BlockKind,
+  BonusPickId,
+  EnemyData,
+  EnemyKind,
+  PuddingData,
+} from "./types";
 import {
   drawBaseCasual,
   drawBulletCasual,
+  drawChestCasual,
   drawEnemyCasual,
   drawGameOverBanner,
   drawGroundCasual,
@@ -110,6 +131,7 @@ const CAT_ENEMY = 0x0004;
 const CAT_BULLET = 0x0008;
 const CAT_BASE = 0x0010;
 const CAT_HOOK = 0x0020;
+const CAT_CHEST = 0x0040;
 
 const LABEL_GROUND = "ground";
 const LABEL_PUDDING = "pudding";
@@ -117,6 +139,7 @@ const LABEL_ENEMY = "enemy";
 const LABEL_BULLET = "bullet";
 const LABEL_BASE = "base";
 const LABEL_HOOK = "hook";
+const LABEL_CHEST = "chest";
 
 function randomKind(): BlockKind {
   const r = Math.random();
@@ -212,6 +235,22 @@ export class Game {
   private enemyHitBaseCooldown = new Map<number, number>();
   private enemyHitPuddingCooldown = new Map<string, number>();
 
+  /** 每 5 波宝箱兵从左侧或右侧交替出现 */
+  private carrierChestSideLeft = true;
+  /** 各加成叠层（同类再选再叠乘） */
+  private bonusLayers: Record<BonusPickId, number> = {
+    shooter_rapid_light: 0,
+    defender_tank_heavy: 0,
+    producer_slow_rich: 0,
+    passive_income_up: 0,
+    base_chip_reduce: 0,
+    shop_discount: 0,
+  };
+  private chestPickModal = document.getElementById(
+    "chest-pick-modal",
+  ) as HTMLElement | null;
+  private chestPickOptionsEl = document.getElementById("chest-pick-options");
+
   private moneyEl = document.getElementById("money")!;
   private waveEl = document.getElementById("wave")!;
   private baseHpEl = document.getElementById("base-hp")!;
@@ -267,7 +306,7 @@ export class Game {
         frictionStatic: 1,
         collisionFilter: {
           category: CAT_GROUND,
-          mask: CAT_BLOCK | CAT_ENEMY,
+          mask: CAT_BLOCK | CAT_ENEMY | CAT_CHEST,
         },
       },
     );
@@ -275,7 +314,7 @@ export class Game {
     this.hook = Bodies.circle(this.craneX, this.hookY, 12, {
       isStatic: true,
       label: LABEL_HOOK,
-      collisionFilter: { category: CAT_HOOK, mask: 0 },
+      collisionFilter: { category: CAT_HOOK, mask: CAT_CHEST },
     });
 
     this.baseBody = Bodies.rectangle(WIDTH / 2, this.worldGroundY - 36, 72, 72, {
@@ -285,7 +324,7 @@ export class Game {
       frictionStatic: 1,
       collisionFilter: {
         category: CAT_BASE,
-        mask: CAT_ENEMY | CAT_BLOCK,
+        mask: CAT_ENEMY | CAT_BLOCK | CAT_CHEST,
       },
     });
 
@@ -296,10 +335,14 @@ export class Game {
 
     this.bindInput();
     this.bindShop();
+    this.bindChestModal();
     this.bindCollisions();
 
     Events.on(this.engine, "beforeUpdate", () => this.onBeforeUpdate());
-    Events.on(this.engine, "afterUpdate", () => this.clampPuddingsAboveGround());
+    Events.on(this.engine, "afterUpdate", () => {
+      this.clampPuddingsAboveGround();
+      this.clampChestsAboveGround();
+    });
   }
 
   start(): void {
@@ -365,7 +408,7 @@ export class Game {
   }
 
   private tryBaseUpgrade(): void {
-    if (this.gameOver) return;
+    if (this.gameOver || this.isChestPickOpen()) return;
     if (this.baseUpgradeLevel >= BASE_UPGRADE_MAX_LEVEL) return;
     const cost = this.getUpgradeCost();
     if (this.money < cost) return;
@@ -398,6 +441,7 @@ export class Game {
       ) {
         return;
       }
+      if (this.isChestPickOpen()) return;
 
       this.keys.add(e.code);
       if (e.code === "Space") {
@@ -445,7 +489,7 @@ export class Game {
 
   private bindCanvasPointer(): void {
     const onDown = (e: PointerEvent) => {
-      if (this.gameOver) return;
+      if (this.gameOver || this.isChestPickOpen()) return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
       if (this.dragPointerId !== null) return;
       e.preventDefault();
@@ -460,6 +504,7 @@ export class Game {
     };
 
     const onMove = (e: PointerEvent) => {
+      if (this.isChestPickOpen()) return;
       if (e.pointerId !== this.dragPointerId) return;
       e.preventDefault();
       const gx = this.clientToGameX(e.clientX);
@@ -502,6 +547,7 @@ export class Game {
       if (!el) return;
       el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
+        if (this.isChestPickOpen()) return;
         setHeld(true);
         try {
           el.setPointerCapture(e.pointerId);
@@ -519,7 +565,7 @@ export class Game {
 
     this.btnGrab?.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      if (this.gameOver) return;
+      if (this.gameOver || this.isChestPickOpen()) return;
       this.toggleGrab();
     });
   }
@@ -529,12 +575,161 @@ export class Game {
     this.btnBaseUpgrade?.addEventListener("click", () => this.tryBaseUpgrade());
   }
 
+  private bindChestModal(): void {
+    this.chestPickModal?.addEventListener("click", (e) => {
+      if (e.target === this.chestPickModal) {
+        e.preventDefault();
+      }
+    });
+  }
+
+  private isChestPickOpen(): boolean {
+    return !!this.chestPickModal && !this.chestPickModal.hidden;
+  }
+
+  private openChestPickModal(): void {
+    if (!this.chestPickModal || !this.chestPickOptionsEl) return;
+    this.runner.enabled = false;
+    this.chestPickModal.hidden = false;
+    this.chestPickOptionsEl.innerHTML = "";
+    const picks = pickThreeBonuses();
+    for (const id of picks) {
+      const ui = BONUS_UI[id];
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chest-pick-btn";
+      const head = document.createElement("div");
+      head.className = "chest-pick-btn-head";
+      const em = document.createElement("span");
+      em.className = "chest-pick-btn-emoji";
+      em.textContent = ui.emoji;
+      const ttl = document.createElement("span");
+      ttl.textContent = ui.title;
+      head.appendChild(em);
+      head.appendChild(ttl);
+      const desc = document.createElement("p");
+      desc.className = "chest-pick-btn-desc";
+      desc.textContent = ui.desc;
+      btn.appendChild(head);
+      btn.appendChild(desc);
+      btn.addEventListener("click", () => this.applyBonusPick(id));
+      this.chestPickOptionsEl.appendChild(btn);
+    }
+  }
+
+  private applyBonusPick(id: BonusPickId): void {
+    this.bonusLayers[id] += 1;
+    if (id === "defender_tank_heavy") {
+      this.scaleAllDefenderHp(BONUS_DEFENDER_HP_MUL);
+    }
+    if (this.chestPickModal) {
+      this.chestPickModal.hidden = true;
+    }
+    this.runner.enabled = true;
+    this.updateHud();
+    const ui = BONUS_UI[id];
+    spawnFloatText(
+      this.fxOverlay,
+      window.innerWidth / 2,
+      window.innerHeight * 0.38,
+      `${ui.emoji} ${ui.title}`,
+      "fx-passive",
+      1400,
+    );
+  }
+
+  private scaleAllDefenderHp(mult: number): void {
+    const bodies = Composite.allBodies(this.world);
+    for (const body of bodies) {
+      if (body.label !== LABEL_PUDDING) continue;
+      const data = body.plugin.pudding as PuddingData | undefined;
+      if (!data || data.kind !== "defender") continue;
+      data.maxHp *= mult;
+      data.hp = Math.min(data.maxHp, data.hp * mult);
+    }
+  }
+
+  private getPassiveIncomePerMinute(): number {
+    const mul =
+      BONUS_PASSIVE_INCOME_MUL ** this.bonusLayers.passive_income_up;
+    return PASSIVE_INCOME_PER_MINUTE * mul;
+  }
+
+  private spawnChestAt(x: number, y: number): void {
+    if (this.gameOver) return;
+    const body = Bodies.rectangle(x, y, CHEST_BOX_W, CHEST_BOX_H, {
+      label: LABEL_CHEST,
+      friction: 0.55,
+      frictionAir: 0.02,
+      density: 0.0012,
+      restitution: 0.12,
+      collisionFilter: {
+        category: CAT_CHEST,
+        mask: CAT_GROUND | CAT_BLOCK | CAT_BASE | CAT_HOOK | CAT_ENEMY,
+      },
+    });
+    body.plugin.chestSpawnedAt = performance.now();
+    Composite.add(this.world, body);
+  }
+
+  private tickChests(dt: number): void {
+    const now = performance.now();
+    const bodies = Composite.allBodies(this.world);
+    for (const body of bodies) {
+      if (body.label !== LABEL_CHEST) continue;
+      const t0 = (body.plugin.chestSpawnedAt as number) ?? now;
+      const left = CHEST_LIFETIME_MS - (now - t0);
+      if (left <= 0) {
+        Composite.remove(this.world, body);
+      } else if (left < 8000) {
+        body.plugin.chestAlarmPhase =
+          ((body.plugin.chestAlarmPhase as number) ?? 0) + dt * 0.018;
+      }
+    }
+  }
+
+  private clampChestsAboveGround(): void {
+    if (this.gameOver) return;
+    const groundTop = this.worldGroundY;
+    const slop = 1.2;
+    const bodies = Composite.allBodies(this.world);
+    for (const body of bodies) {
+      if (body.label !== LABEL_CHEST) continue;
+      const verts = body.vertices;
+      if (!verts.length) continue;
+      let maxY = verts[0]!.y;
+      for (let i = 1; i < verts.length; i++) {
+        const y = verts[i]!.y;
+        if (y > maxY) maxY = y;
+      }
+      if (maxY <= groundTop - slop) continue;
+      const dy = groundTop - slop - maxY;
+      Body.translate(body, { x: 0, y: dy });
+      Body.setVelocity(body, {
+        x: body.velocity.x * 0.98,
+        y: Math.min(0, body.velocity.y),
+      });
+      Body.setAngularVelocity(body, body.angularVelocity * 0.9);
+    }
+  }
+
+  private handleHookChestContact(a: Matter.Body, b: Matter.Body): void {
+    const hook = a.label === LABEL_HOOK ? a : b.label === LABEL_HOOK ? b : null;
+    const chest =
+      a.label === LABEL_CHEST ? a : b.label === LABEL_CHEST ? b : null;
+    if (!hook || !chest || this.gameOver || this.isChestPickOpen()) return;
+    Composite.remove(this.world, chest);
+    this.openChestPickModal();
+  }
+
   private bindCollisions(): void {
     Events.on(this.engine, "collisionStart", (ev: Matter.IEventCollision<Matter.Engine>) => {
       for (const pair of ev.pairs) {
         const { bodyA, bodyB } = pair;
         this.handleSupportLanding(bodyA, bodyB);
+        this.handleChestGroundLanding(bodyA, bodyB);
         this.handleBulletHit(bodyA, bodyB);
+        this.handleHookChestContact(bodyA, bodyB);
         this.applyPuddingJiggleFromPair(pair);
         this.queuePerfectMerge(bodyA, bodyB);
       }
@@ -563,7 +758,20 @@ export class Game {
     });
   }
 
-  /** 布丁落在地面时需落在吊机安全区；落在核心上任意位置均可搭建 */
+  /** 布丁落在地面时需落在吊机安全区；落在核心上任意位置均可搭建；宝箱在红区落地消失 */
+  private handleChestGroundLanding(a: Matter.Body, b: Matter.Body): void {
+    const chest =
+      a.label === LABEL_CHEST ? a : b.label === LABEL_CHEST ? b : null;
+    if (!chest) return;
+    const other = a === chest ? b : a;
+    if (other.label !== LABEL_GROUND) return;
+    const minX = this.craneX - SAFE_HALF_WIDTH;
+    const maxX = this.craneX + SAFE_HALF_WIDTH;
+    if (chest.position.x < minX || chest.position.x > maxX) {
+      Composite.remove(this.world, chest);
+    }
+  }
+
   private applyPuddingJiggleFromPair(pair: Matter.Pair): void {
     const col = pair.collision;
     if (!col?.collided) return;
@@ -852,7 +1060,7 @@ export class Game {
       angle: 0,
       collisionFilter: {
         category: CAT_BLOCK,
-        mask: CAT_GROUND | CAT_ENEMY | CAT_BLOCK | CAT_BASE,
+        mask: CAT_GROUND | CAT_ENEMY | CAT_BLOCK | CAT_BASE | CAT_CHEST,
       },
     });
 
@@ -894,6 +1102,9 @@ export class Game {
     const dmg = (bullet.plugin.bulletDmg as number) ?? BULLET_DAMAGE;
     data.hp -= dmg;
     if (data.hp <= 0) {
+      if (data.dropsChest) {
+        this.spawnChestAt(enemy.position.x, enemy.position.y - 14);
+      }
       Composite.remove(this.world, enemy);
     }
   }
@@ -915,7 +1126,10 @@ export class Game {
     this.enemyHitBaseCooldown.set(id, now);
     const ed = enemy.plugin.puddingEnemy as EnemyData | undefined;
     this.baseBody.plugin.hitFlashUntil = now + 320;
-    const dmg = ed?.damageToBase ?? ENEMY_DAMAGE;
+    let dmg = ed?.damageToBase ?? ENEMY_DAMAGE;
+    const baseMul =
+      BONUS_BASE_DAMAGE_TAKEN_MUL ** this.bonusLayers.base_chip_reduce;
+    dmg = Math.max(1, Math.floor(dmg * baseMul));
     this.baseHp -= dmg;
     const basePill = document.querySelector(".stat-pill.stat-base");
     if (basePill) {
@@ -967,7 +1181,13 @@ export class Game {
     if (now - last < 450) return;
     this.enemyHitPuddingCooldown.set(key, now);
 
-    const tank = data.kind === "defender" ? (data.powerMult ?? 1) : 1;
+    let tank = data.kind === "defender" ? (data.powerMult ?? 1) : 1;
+    if (data.kind === "defender") {
+      const mit =
+        (1 / BONUS_DEFENDER_CHIP_TAKEN_MUL) **
+        this.bonusLayers.defender_tank_heavy;
+      tank *= mit;
+    }
     data.hp -= chip / tank;
     if (data.hp <= 0) {
       this.detachAndRemovePudding(pud);
@@ -979,7 +1199,7 @@ export class Game {
       this.processMergeQueue();
     }
 
-    if (this.gameOver) return;
+    if (this.gameOver || this.isChestPickOpen()) return;
 
     let dx = 0;
     if (
@@ -1013,11 +1233,13 @@ export class Game {
     this.tickEnemies();
     this.tickWaves(dt);
     this.tickBullets();
+    this.tickChests(dt);
   }
 
   private tickPassiveIncome(dt: number): void {
-    if (this.gameOver || PASSIVE_INCOME_PER_MINUTE <= 0) return;
-    this.passiveIncomeFrac += (PASSIVE_INCOME_PER_MINUTE / 60_000) * dt;
+    const rate = this.getPassiveIncomePerMinute();
+    if (this.gameOver || rate <= 0) return;
+    this.passiveIncomeFrac += (rate / 60_000) * dt;
     const whole = Math.floor(this.passiveIncomeFrac);
     if (whole <= 0) return;
     this.passiveIncomeFrac -= whole;
@@ -1035,10 +1257,18 @@ export class Game {
 
       if (data.kind === "producer") {
         data.produceAccumulator += dt;
-        if (data.produceAccumulator >= PRODUCER_INTERVAL_MS) {
+        const prodInt =
+          PRODUCER_INTERVAL_MS *
+          BONUS_PRODUCER_INTERVAL_MUL ** this.bonusLayers.producer_slow_rich;
+        if (data.produceAccumulator >= prodInt) {
           data.produceAccumulator = 0;
           const gainMul = data.mergeProducerGainMul ?? 1;
-          const gain = Math.max(1, Math.round(PRODUCER_AMOUNT * gainMul));
+          const bonusGain =
+            BONUS_PRODUCER_GAIN_MUL ** this.bonusLayers.producer_slow_rich;
+          const gain = Math.max(
+            1,
+            Math.round(PRODUCER_AMOUNT * gainMul * bonusGain),
+          );
           this.money += gain;
           this.updateHud();
           this.showProducerIncomeFx(body, gain);
@@ -1047,7 +1277,10 @@ export class Game {
 
       if (data.kind === "shooter") {
         data.shootAccumulator += dt;
-        if (data.shootAccumulator >= SHOOT_INTERVAL_MS) {
+        const shootInt =
+          SHOOT_INTERVAL_MS *
+          BONUS_SHOOTER_INTERVAL_MUL ** this.bonusLayers.shooter_rapid_light;
+        if (data.shootAccumulator >= shootInt) {
           data.shootAccumulator = 0;
           this.tryShoot(body, data);
         }
@@ -1110,7 +1343,9 @@ export class Game {
           },
         },
       );
-      bullet.plugin.bulletDmg = BULLET_DAMAGE;
+      const dmgMul =
+        BONUS_SHOOTER_DMG_MUL ** this.bonusLayers.shooter_rapid_light;
+      bullet.plugin.bulletDmg = BULLET_DAMAGE * dmgMul;
       Body.setVelocity(bullet, {
         x: dir.x * 12,
         y: dir.y * 12,
@@ -1146,11 +1381,17 @@ export class Game {
       this.spawnEnemy(40 + push + i * 18, true);
       this.spawnEnemy(WIDTH - 40 - push - i * 18, false);
     }
+    if (this.wave > 0 && this.wave % CHEST_CARRIER_WAVE_EVERY === 0) {
+      const fromLeft = this.carrierChestSideLeft;
+      this.carrierChestSideLeft = !this.carrierChestSideLeft;
+      const cx = fromLeft ? 40 + push : WIDTH - 40 - push;
+      this.spawnEnemy(cx, fromLeft, "carrier");
+    }
     this.updateHud();
   }
 
-  private spawnEnemy(x: number, fromLeft: boolean): void {
-    const kind = pickEnemyKind(this.wave);
+  private spawnEnemy(x: number, fromLeft: boolean, kindOverride?: EnemyKind): void {
+    const kind = kindOverride ?? pickEnemyKind(this.wave);
     const def = ENEMY_KIND_DEFS[kind];
     const cy = enemySpawnCenterY(this.worldGroundY, def.h);
     const body = Bodies.rectangle(x, cy, def.w, def.h, {
@@ -1159,7 +1400,7 @@ export class Game {
       density: def.density,
       collisionFilter: {
         category: CAT_ENEMY,
-        mask: CAT_GROUND | CAT_BLOCK | CAT_BASE | CAT_BULLET,
+        mask: CAT_GROUND | CAT_BLOCK | CAT_BASE | CAT_BULLET | CAT_CHEST,
       },
     });
     const data = createEnemyPluginData(kind, this.wave);
@@ -1185,7 +1426,7 @@ export class Game {
   }
 
   private toggleGrab(): void {
-    if (this.gameOver) return;
+    if (this.gameOver || this.isChestPickOpen()) return;
     if (this.grabConstraint) {
       this.releaseGrab();
       this.updateHud();
@@ -1233,21 +1474,35 @@ export class Game {
   }
 
   private getRollCost(): number {
-    return Math.min(
-      ROLL_COST_MAX,
-      ROLL_COST_BASE + this.blocksPurchased * ROLL_COST_PER_BLOCK_PURCHASED,
+    const disc =
+      BONUS_SHOP_COST_SUB * this.bonusLayers.shop_discount;
+    return Math.max(
+      1,
+      Math.min(
+        ROLL_COST_MAX,
+        ROLL_COST_BASE +
+          this.blocksPurchased * ROLL_COST_PER_BLOCK_PURCHASED -
+          disc,
+      ),
     );
   }
 
   private getTakeCost(): number {
-    return Math.min(
-      TAKE_COST_MAX,
-      TAKE_COST_BASE + this.blocksPurchased * TAKE_COST_PER_BLOCK_PURCHASED,
+    const disc =
+      BONUS_SHOP_COST_SUB * this.bonusLayers.shop_discount;
+    return Math.max(
+      1,
+      Math.min(
+        TAKE_COST_MAX,
+        TAKE_COST_BASE +
+          this.blocksPurchased * TAKE_COST_PER_BLOCK_PURCHASED -
+          disc,
+      ),
     );
   }
 
   private rollShop(): void {
-    if (this.gameOver) return;
+    if (this.gameOver || this.isChestPickOpen()) return;
     const cost = this.getRollCost();
     if (this.money < cost) return;
     this.money -= cost;
@@ -1269,7 +1524,7 @@ export class Game {
   }
 
   private takeFromSlot(index: number): void {
-    if (this.gameOver) return;
+    if (this.gameOver || this.isChestPickOpen()) return;
     if (!this.shopFilled || index < 0 || index >= this.shopSlots.length) {
       return;
     }
@@ -1307,7 +1562,9 @@ export class Game {
     if (kind === "defender") {
       w = 58;
       h = 46;
-      maxHp = DEFENDER_HP;
+      maxHp =
+        DEFENDER_HP *
+        BONUS_DEFENDER_HP_MUL ** this.bonusLayers.defender_tank_heavy;
     }
     if (kind === "producer") {
       w = 46;
@@ -1323,7 +1580,7 @@ export class Game {
       density: kind === "defender" ? 0.008 : 0.004,
       collisionFilter: {
         category: CAT_BLOCK,
-        mask: CAT_GROUND | CAT_ENEMY | CAT_BLOCK | CAT_BASE,
+        mask: CAT_GROUND | CAT_ENEMY | CAT_BLOCK | CAT_BASE | CAT_CHEST,
       },
     });
 
@@ -1630,13 +1887,32 @@ export class Game {
           this.drawEnemyEyes(ctx, body, puddingBodies, now, ew, eh);
           continue;
         }
+        if (body.label === LABEL_CHEST) {
+          const t0 = (body.plugin.chestSpawnedAt as number) ?? now;
+          const left = CHEST_LIFETIME_MS - (now - t0);
+          let alarmT = 0;
+          if (left < 8000 && left > 0) {
+            alarmT =
+              0.5 +
+              0.5 * Math.sin((body.plugin.chestAlarmPhase as number) ?? 0);
+          }
+          drawChestCasual(ctx, body, alarmT);
+          continue;
+        }
         if (body.label === LABEL_BULLET) {
           drawBulletCasual(ctx, body.position.x, body.position.y);
         }
       }
     };
 
-    drawLayer([LABEL_GROUND, LABEL_BASE, LABEL_PUDDING, LABEL_ENEMY, LABEL_BULLET]);
+    drawLayer([
+      LABEL_GROUND,
+      LABEL_BASE,
+      LABEL_PUDDING,
+      LABEL_ENEMY,
+      LABEL_CHEST,
+      LABEL_BULLET,
+    ]);
 
     if (this.grabConstraint) {
       const other = this.grabConstraint.bodyB;

@@ -120,3 +120,21 @@ export const MERGE_MAX_STACK_DEPTH = 12;
 export const MERGE_MAX_PROJECTILES = 8;
 /** 多发弹道扇形半角（弧度） */
 export const MERGE_MULTI_SHOT_SPREAD_RAD = 0.14;
+
+/** 每 N 波额外出现 1 只携带宝箱的敌人（左右交替） */
+export const CHEST_CARRIER_WAVE_EVERY = 5;
+/** 掉落宝箱尺寸与寿命 */
+export const CHEST_BOX_W = 34;
+export const CHEST_BOX_H = 28;
+export const CHEST_LIFETIME_MS = 45000;
+
+/** 宝箱加成数值（可叠乘：同类再选一层再乘一次） */
+export const BONUS_SHOOTER_INTERVAL_MUL = 0.5;
+export const BONUS_SHOOTER_DMG_MUL = 0.65;
+export const BONUS_DEFENDER_HP_MUL = 1.35;
+export const BONUS_DEFENDER_CHIP_TAKEN_MUL = 0.72;
+export const BONUS_PRODUCER_INTERVAL_MUL = 1.55;
+export const BONUS_PRODUCER_GAIN_MUL = 1.45;
+export const BONUS_PASSIVE_INCOME_MUL = 1.3;
+export const BONUS_BASE_DAMAGE_TAKEN_MUL = 0.78;
+export const BONUS_SHOP_COST_SUB = 3;

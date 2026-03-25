@@ -562,3 +562,110 @@ body.game-over-shake {
   color: #14532d;
   box-shadow: 0 5px 0 rgba(22, 101, 52, 0.28);
 }
+
+.chest-pick-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(45, 35, 30, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.chest-pick-card {
+  width: min(520px, 100%);
+  max-height: min(90vh, 560px);
+  overflow-y: auto;
+  padding: 22px 20px;
+  border-radius: 22px;
+  background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%);
+  border: 4px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 0 rgba(180, 83, 9, 0.15), 0 24px 48px rgba(0, 0, 0, 0.2);
+}
+
+.chest-pick-title {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #78350f;
+  text-align: center;
+}
+
+.chest-pick-sub {
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  color: #92400e;
+  text-align: center;
+  opacity: 0.92;
+}
+
+.chest-pick-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chest-pick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 3px solid rgba(180, 83, 9, 0.35);
+  background: linear-gradient(180deg, #fff, #fff7ed);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 4px 0 rgba(180, 83, 9, 0.12);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.chest-pick-btn:hover {
+  border-color: rgba(217, 119, 6, 0.65);
+  box-shadow: 0 5px 0 rgba(217, 119, 6, 0.18);
+}
+
+.chest-pick-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(180, 83, 9, 0.12);
+}
+
+.chest-pick-btn-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #451a03;
+}
+
+.chest-pick-btn-emoji {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.chest-pick-btn-desc {
+  margin: 0;
+  padding-left: 2px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #57534e;
+  line-height: 1.35;
+}
+
+@media (min-width: 520px) {
+  .chest-pick-options {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .chest-pick-btn {
+    flex: 1 1 calc(33.333% - 8px);
+    min-width: 140px;
+  }
+}

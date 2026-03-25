@@ -1,7 +1,16 @@
 export type BlockKind = "shooter" | "defender" | "producer";
 
-/** 敌人种类：后期波次混合刷新加压 */
-export type EnemyKind = "runner" | "grunt" | "brute" | "rusher";
+/** 敌人种类：后期波次混合刷新加压；carrier 仅由波次逻辑单独生成 */
+export type EnemyKind = "runner" | "grunt" | "brute" | "rusher" | "carrier";
+
+/** 宝箱三选一的六种全局加成 id */
+export type BonusPickId =
+  | "shooter_rapid_light"
+  | "defender_tank_heavy"
+  | "producer_slow_rich"
+  | "passive_income_up"
+  | "base_chip_reduce"
+  | "shop_discount";
 
 export interface PuddingData {
   kind: BlockKind;
@@ -38,4 +47,6 @@ export interface EnemyData {
   damageToPudding: number;
   displayW: number;
   displayH: number;
+  /** 击杀后是否掉落可拾取宝箱 */
+  dropsChest?: boolean;
 }

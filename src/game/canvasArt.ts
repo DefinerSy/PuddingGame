@@ -258,6 +258,12 @@ const ENEMY_STYLE: Record<
     dark: "#dc2626",
     stroke: "rgba(127, 29, 29, 0.7)",
   },
+  carrier: {
+    light: "#fef3c7",
+    mid: "#fbbf24",
+    dark: "#d97706",
+    stroke: "rgba(146, 64, 14, 0.8)",
+  },
 };
 
 export function drawEnemyCasual(
@@ -294,6 +300,57 @@ export function drawEnemyCasual(
   ctx.ellipse(-w * 0.08, y + h * 0.28, w * 0.18, h * 0.12, -0.15, 0, Math.PI * 2);
   ctx.fill();
 
+  if (kind === "carrier") {
+    const bx = -w * 0.22;
+    const by = y + h * 0.08;
+    const bw = w * 0.44;
+    const bh = h * 0.38;
+    ctx.fillStyle = "#92400e";
+    roundRectPath(ctx, bx, by, bw, bh, 4);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(254, 243, 199, 0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(253, 224, 71, 0.95)";
+    ctx.beginPath();
+    ctx.arc(bx + bw * 0.5, by + bh * 0.35, Math.min(bw, bh) * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+export function drawChestCasual(
+  ctx: CanvasRenderingContext2D,
+  body: Matter.Body,
+  alarmT: number,
+): void {
+  const w = body.bounds.max.x - body.bounds.min.x;
+  const h = body.bounds.max.y - body.bounds.min.y;
+  ctx.save();
+  ctx.translate(body.position.x, body.position.y);
+  ctx.rotate(body.angle);
+  const x = -w / 2;
+  const y = -h / 2;
+  const rr = 5;
+  roundRectPath(ctx, x, y, w, h, rr);
+  const g = ctx.createLinearGradient(x, y, x + w, y + h);
+  g.addColorStop(0, "#fde68a");
+  g.addColorStop(0.45, "#f59e0b");
+  g.addColorStop(1, "#b45309");
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle =
+    alarmT > 0
+      ? `rgba(220, 38, 38, ${0.55 + alarmT * 0.4})`
+      : "rgba(120, 53, 15, 0.85)";
+  ctx.lineWidth = 2 + alarmT * 2;
+  ctx.stroke();
+  ctx.fillStyle = "rgba(254, 243, 199, 0.9)";
+  ctx.font = `bold ${Math.min(18, w * 0.42)}px Nunito, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("✦", 0, y + h * 0.38);
   ctx.restore();
 }
 
