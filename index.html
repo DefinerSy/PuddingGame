@@ -6,22 +6,57 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title>布丁塔防 · Pudding Stack</title>
+    <title>布丁叠叠乐 · Pudding Stack</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="app">
       <header class="hud">
-        <div class="hud-row">
-          <span id="money">费用: 0</span>
-          <span id="wave">波次: 0</span>
-          <span id="base-hp">基地: 100</span>
+        <h1 class="game-title">布丁叠叠乐</h1>
+        <div class="hud-row stats-row">
+          <div class="stat-pill stat-coins">
+            <span class="stat-emoji" aria-hidden="true">🪙</span>
+            <div class="stat-text">
+              <span class="stat-label">费用</span>
+              <span id="money" class="stat-value">0</span>
+            </div>
+          </div>
+          <div class="stat-pill stat-wave">
+            <span class="stat-emoji" aria-hidden="true">🌊</span>
+            <div class="stat-text">
+              <span class="stat-label">波次</span>
+              <span id="wave" class="stat-value">0</span>
+            </div>
+          </div>
+          <div class="stat-pill stat-base">
+            <span class="stat-emoji" aria-hidden="true">🏠</span>
+            <div class="stat-text">
+              <span class="stat-label">基地</span>
+              <span id="base-hp" class="stat-value">100</span>
+            </div>
+          </div>
         </div>
-        <div class="hud-row shop">
-          <button type="button" id="btn-roll">老虎机 Roll</button>
-          <span id="roll-cost"></span>
+        <div class="hud-row shop shop-panel">
+          <div class="shop-actions">
+            <button type="button" id="btn-roll" class="btn btn-roll">
+              <span class="btn-emoji" aria-hidden="true">🎰</span>
+              <span class="btn-label">老虎机</span>
+            </button>
+            <span id="roll-cost" class="cost-tag"></span>
+          </div>
           <div id="slots" class="slots"></div>
-          <button type="button" id="btn-refresh">刷新陈列</button>
-          <span id="refresh-cost"></span>
+          <div class="shop-actions shop-refresh">
+            <button type="button" id="btn-refresh" class="btn btn-refresh">
+              <span class="btn-emoji" aria-hidden="true">🔄</span>
+              <span class="btn-label">刷新</span>
+            </button>
+            <span id="refresh-cost" class="cost-tag"></span>
+          </div>
         </div>
         <p class="hint hint-desktop">
           A/D 或 ←/→ 移动吊机 · 空格抓取/释放 · 仅绿色区域可着地，红区落地会销毁

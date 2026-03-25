@@ -1,6 +1,6 @@
 # PuddingGame
 
-基于 Web（Vite + TypeScript + Matter.js）的 2D 物理堆叠塔防原型：吊机移动、老虎机 Roll、三格取货、合法着地区随吊机移动、双侧波次敌人。
+基于 Web（Vite + TypeScript + Matter.js）的 2D 物理堆叠塔防原型：吊机移动、老虎机 Roll、三格取货、合法着地区随吊机移动、双侧波次敌人。界面为柔和马卡龙休闲风；画布渐变天空、草地与果冻感方块绘制集中在 `src/game/canvasArt.ts`。
 
 ## 本地运行
 

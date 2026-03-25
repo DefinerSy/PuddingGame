@@ -19,7 +19,6 @@ import {
   EYE_BLINK_GAP_MIN_MS,
   GROUND_THICK,
   GROUND_Y,
-  HEIGHT,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
   REFRESH_COST,
@@ -41,6 +40,18 @@ import {
   WIDTH,
 } from "./config";
 import type { BlockKind, EnemyData, PuddingData } from "./types";
+import {
+  drawBaseCasual,
+  drawBulletCasual,
+  drawEnemyCasual,
+  drawGameOverBanner,
+  drawGroundCasual,
+  drawHealthBarPill,
+  drawHookCasual,
+  drawPuddingCasual,
+  drawRopeCasual,
+  drawSkyAndZones,
+} from "./canvasArt";
 
 const { Engine, Bodies, Body, Events, Composite, Constraint, Runner } = Matter;
 
@@ -763,13 +774,13 @@ export class Game {
   }
 
   private updateHud(): void {
-    this.moneyEl.textContent = `费用: ${this.money}`;
-    this.waveEl.textContent = `波次: ${this.wave}`;
-    this.baseHpEl.textContent = `基地: ${Math.ceil(this.baseHp)}${
-      this.gameOver ? " (失败)" : ""
+    this.moneyEl.textContent = String(this.money);
+    this.waveEl.textContent = String(this.wave);
+    this.baseHpEl.textContent = `${Math.ceil(this.baseHp)}${
+      this.gameOver ? " 💔" : ""
     }`;
-    this.rollCostEl.textContent = `消耗 ${ROLL_COST}`;
-    this.refreshCostEl.textContent = `消耗 ${REFRESH_COST}`;
+    this.rollCostEl.textContent = `-${ROLL_COST}`;
+    this.refreshCostEl.textContent = `-${REFRESH_COST}`;
     this.btnRoll.disabled = this.gameOver || this.money < ROLL_COST;
     this.btnRefresh.disabled =
       this.gameOver || !this.shopFilled || this.money < REFRESH_COST;
@@ -792,7 +803,8 @@ export class Game {
       title.textContent = kindLabel(kind);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = `取出 (${TAKE_COST})`;
+      btn.className = "btn btn-take";
+      btn.textContent = `取出 ${TAKE_COST} 🪙`;
       btn.disabled =
         this.gameOver || this.money < TAKE_COST || !!this.grabConstraint;
       btn.addEventListener("click", () => this.takeFromSlot(index));
@@ -810,159 +822,88 @@ export class Game {
   private draw(): void {
     const now = performance.now();
     const ctx = this.ctx;
-    ctx.fillStyle = "#0f1116";
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
     const safeMin = this.craneX - SAFE_HALF_WIDTH;
     const safeMax = this.craneX + SAFE_HALF_WIDTH;
-    ctx.fillStyle = "rgba(80, 200, 120, 0.18)";
-    ctx.fillRect(safeMin, 0, safeMax - safeMin, GROUND_Y);
-
-    ctx.fillStyle = "rgba(200, 80, 80, 0.12)";
-    ctx.fillRect(0, 0, safeMin, GROUND_Y);
-    ctx.fillRect(safeMax, 0, WIDTH - safeMax, GROUND_Y);
-
-    ctx.strokeStyle = "#4a5568";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    ctx.moveTo(safeMin, 0);
-    ctx.lineTo(safeMin, GROUND_Y);
-    ctx.moveTo(safeMax, 0);
-    ctx.lineTo(safeMax, GROUND_Y);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    drawSkyAndZones(ctx, safeMin, safeMax);
 
     const bodies = Composite.allBodies(this.world);
     const puddingBodies = bodies.filter((b) => b.label === LABEL_PUDDING);
     const enemyBodies = bodies.filter((b) => b.label === LABEL_ENEMY);
-    for (const body of bodies) {
-      if (body.label === LABEL_HOOK) {
-        ctx.fillStyle = "#a78bfa";
-        ctx.beginPath();
-        ctx.arc(body.position.x, body.position.y, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#c4b5fd";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        continue;
-      }
-      if (body.label === LABEL_BASE) {
-        ctx.fillStyle = "rgba(100, 149, 237, 0.35)";
-        ctx.strokeStyle = "#6495ed";
-        this.drawBodyRect(ctx, body);
-        continue;
-      }
-      if (body.label === LABEL_GROUND) {
-        ctx.fillStyle = "#2d3344";
-        this.drawBodyRect(ctx, body);
-        continue;
-      }
-      if (body.label === LABEL_PUDDING) {
-        const kind = body.plugin.puddingKind as BlockKind;
-        ctx.fillStyle =
-          kind === "shooter"
-            ? "#4ade80"
-            : kind === "defender"
-              ? "#d4a574"
-              : "#fde047";
-        ctx.strokeStyle = "#1e293b";
-        this.drawBodyRect(ctx, body);
-        const data = body.plugin.pudding as PuddingData | undefined;
-        if (data && data.hp < data.maxHp) {
-          const bw = body.bounds.max.x - body.bounds.min.x;
-          const barW = Math.min(56, Math.max(28, bw - 6));
-          const top = body.bounds.min.y;
-          const left = body.position.x - barW / 2;
-          const t = Math.max(0, data.hp / data.maxHp);
-          ctx.fillStyle = "#1e293b";
-          ctx.fillRect(left, top - 9, barW, 5);
-          ctx.fillStyle = t > 0.35 ? "#22c55e" : "#ef4444";
-          ctx.fillRect(left, top - 9, barW * t, 5);
+
+    const drawLayer = (labels: string[]) => {
+      for (const body of bodies) {
+        if (!labels.includes(body.label)) continue;
+        if (body.label === LABEL_GROUND) {
+          drawGroundCasual(ctx, body);
+          continue;
         }
-        this.drawPuddingEyes(ctx, body, puddingBodies, enemyBodies, now);
-        continue;
-      }
-      if (body.label === LABEL_ENEMY) {
-        ctx.fillStyle = "#f87171";
-        ctx.strokeStyle = "#7f1d1d";
-        this.drawBodyRect(ctx, body);
-        const ed = body.plugin.puddingEnemy as EnemyData | undefined;
-        if (ed) {
-          const t = ed.hp / (ed.maxHp > 0 ? ed.maxHp : ENEMY_HP);
-          ctx.fillStyle = "#fca5a5";
-          ctx.fillRect(body.position.x - 18, body.position.y - 28, 36 * t, 3);
+        if (body.label === LABEL_BASE) {
+          drawBaseCasual(ctx, body);
+          continue;
         }
-        this.drawEnemyEyes(ctx, body, puddingBodies, now);
-        continue;
+        if (body.label === LABEL_PUDDING) {
+          const kind = body.plugin.puddingKind as BlockKind;
+          drawPuddingCasual(ctx, body, kind);
+          const data = body.plugin.pudding as PuddingData | undefined;
+          if (data && data.hp < data.maxHp) {
+            const bw = body.bounds.max.x - body.bounds.min.x;
+            const barW = Math.min(56, Math.max(28, bw - 6));
+            drawHealthBarPill(
+              ctx,
+              body.position.x,
+              body.bounds.min.y,
+              barW,
+              Math.max(0, data.hp / data.maxHp),
+              "friendly",
+            );
+          }
+          this.drawPuddingEyes(ctx, body, puddingBodies, enemyBodies, now);
+          continue;
+        }
+        if (body.label === LABEL_ENEMY) {
+          drawEnemyCasual(ctx, body);
+          const ed = body.plugin.puddingEnemy as EnemyData | undefined;
+          if (ed) {
+            const t = ed.hp / (ed.maxHp > 0 ? ed.maxHp : ENEMY_HP);
+            drawHealthBarPill(
+              ctx,
+              body.position.x,
+              body.bounds.min.y,
+              38,
+              Math.max(0, t),
+              "foe",
+            );
+          }
+          this.drawEnemyEyes(ctx, body, puddingBodies, now);
+          continue;
+        }
+        if (body.label === LABEL_BULLET) {
+          drawBulletCasual(ctx, body.position.x, body.position.y);
+        }
       }
-      if (body.label === LABEL_BULLET) {
-        ctx.fillStyle = "#fef08a";
-        ctx.beginPath();
-        ctx.arc(body.position.x, body.position.y, 6, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+    };
+
+    drawLayer([LABEL_GROUND, LABEL_BASE, LABEL_PUDDING, LABEL_ENEMY, LABEL_BULLET]);
 
     if (this.grabConstraint) {
       const other = this.grabConstraint.bodyB;
       if (other) {
-        ctx.strokeStyle = "#94a3b8";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(this.hook.position.x, this.hook.position.y);
-        ctx.lineTo(other.position.x, other.position.y);
-        ctx.stroke();
+        drawRopeCasual(
+          ctx,
+          this.hook.position.x,
+          this.hook.position.y,
+          other.position.x,
+          other.position.y,
+        );
       }
     }
 
-    ctx.fillStyle = "#e2e8f0";
-    ctx.font = "14px system-ui";
-    ctx.fillText(
+    drawHookCasual(ctx, this.hook.position.x, this.hook.position.y);
+
+    drawGameOverBanner(
+      ctx,
       this.gameOver ? "基地被攻破 — 刷新页面重开" : "",
-      24,
-      HEIGHT - 20,
     );
-  }
-
-  private drawBodyRect(
-    ctx: CanvasRenderingContext2D,
-    body: Matter.Body,
-  ): void {
-    ctx.save();
-    ctx.translate(body.position.x, body.position.y);
-    ctx.rotate(body.angle);
-    const w = body.bounds.max.x - body.bounds.min.x;
-    const h = body.bounds.max.y - body.bounds.min.y;
-    const x = -w / 2;
-    const y = -h / 2;
-    const r = 6;
-    this.roundRectPath(ctx, x, y, w, h, r);
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private roundRectPath(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number,
-  ): void {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
   }
 
   private updateEyeBlink(body: Matter.Body, now: number): number {
@@ -1101,9 +1042,9 @@ export class Game {
     }
 
     this.drawCharacterEyes(ctx, self, gazeWorld, now, {
-      white: "#f8fafc",
-      rim: "#0f172a",
-      pupil: "#0f172a",
+      white: "#ffffff",
+      rim: "#57534e",
+      pupil: "#44403c",
     });
   }
 
@@ -1129,9 +1070,9 @@ export class Game {
     }
 
     this.drawCharacterEyes(ctx, self, gazeWorld, now, {
-      white: "#fff7ed",
-      rim: "#431407",
-      pupil: "#1c1917",
+      white: "#fffbeb",
+      rim: "#78350f",
+      pupil: "#422006",
     });
   }
 }
