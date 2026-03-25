@@ -672,9 +672,23 @@ export class Game {
     return PASSIVE_INCOME_PER_MINUTE * mul;
   }
 
+  /**
+   * 宝箱中心若落在红区会在首次触地时被移除，看起来像「没掉」。
+   * 将 x 钳到当前吊机绿区内（敌人常在边缘死亡）。
+   */
+  private clampChestSpawnX(x: number): number {
+    const pad = CHEST_BOX_W / 2 + 6;
+    const inner = SAFE_HALF_WIDTH - pad;
+    if (inner <= 0) return this.craneX;
+    const minX = this.craneX - inner;
+    const maxX = this.craneX + inner;
+    return Math.min(maxX, Math.max(minX, x));
+  }
+
   private spawnChestAt(x: number, y: number): void {
     if (this.gameOver) return;
-    const body = Bodies.rectangle(x, y, CHEST_BOX_W, CHEST_BOX_H, {
+    const cx = this.clampChestSpawnX(x);
+    const body = Bodies.rectangle(cx, y, CHEST_BOX_W, CHEST_BOX_H, {
       label: LABEL_CHEST,
       friction: 0.55,
       frictionAir: 0.02,
