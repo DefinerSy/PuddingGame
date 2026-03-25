@@ -45,3 +45,11 @@ export const ENEMIES_PER_SIDE_BASE = 1;
 export const PUDDING_EYE_ENEMY_RANGE = 380;
 /** 与邻居布丁「对视」的搜索半径 */
 export const PUDDING_EYE_NEIGHBOR_RANGE = 145;
+
+/** 敌人眼珠看向最近布丁；超出此距离则看向基地 */
+export const ENEMY_EYE_PUDDING_RANGE = 420;
+
+/** 偶尔眨眼：单次闭眼时长与间隔范围（毫秒） */
+export const EYE_BLINK_DURATION_MS = 110;
+export const EYE_BLINK_GAP_MIN_MS = 1800;
+export const EYE_BLINK_GAP_MAX_MS = 4800;

@@ -11,6 +11,10 @@ import {
   ENEMY_DAMAGE_TO_PUDDING,
   ENEMY_HP,
   ENEMY_SPEED,
+  ENEMY_EYE_PUDDING_RANGE,
+  EYE_BLINK_DURATION_MS,
+  EYE_BLINK_GAP_MAX_MS,
+  EYE_BLINK_GAP_MIN_MS,
   GROUND_THICK,
   GROUND_Y,
   HEIGHT,
@@ -60,6 +64,28 @@ function clampMag(v: Matter.Vector, maxLen: number): Matter.Vector {
   if (m <= maxLen || m < 1e-6) return v;
   const s = maxLen / m;
   return { x: v.x * s, y: v.y * s };
+}
+
+interface EyeBlinkState {
+  /** 下一次开始眨眼的时间戳 */
+  nextAt: number;
+  /** >0 且 now < blinkUntil 时为闭眼动画中 */
+  blinkUntil: number;
+}
+
+function randomBlinkGap(): number {
+  return (
+    EYE_BLINK_GAP_MIN_MS +
+    Math.random() * (EYE_BLINK_GAP_MAX_MS - EYE_BLINK_GAP_MIN_MS)
+  );
+}
+
+function initEyeBlink(body: Matter.Body, now: number): void {
+  if (body.plugin.eyeBlink) return;
+  body.plugin.eyeBlink = {
+    nextAt: now + randomBlinkGap() * (0.4 + Math.random() * 0.6),
+    blinkUntil: 0,
+  } satisfies EyeBlinkState;
 }
 
 function kindLabel(k: BlockKind): string {
@@ -763,6 +789,7 @@ export class Game {
   };
 
   private draw(): void {
+    const now = performance.now();
     const ctx = this.ctx;
     ctx.fillStyle = "#0f1116";
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -834,7 +861,7 @@ export class Game {
           ctx.fillStyle = t > 0.35 ? "#22c55e" : "#ef4444";
           ctx.fillRect(left, top - 9, barW * t, 5);
         }
-        this.drawPuddingEyes(ctx, body, puddingBodies, enemyBodies);
+        this.drawPuddingEyes(ctx, body, puddingBodies, enemyBodies, now);
         continue;
       }
       if (body.label === LABEL_ENEMY) {
@@ -847,6 +874,7 @@ export class Game {
           ctx.fillStyle = "#fca5a5";
           ctx.fillRect(body.position.x - 18, body.position.y - 28, 36 * t, 3);
         }
+        this.drawEnemyEyes(ctx, body, puddingBodies, now);
         continue;
       }
       if (body.label === LABEL_BULLET) {
@@ -918,11 +946,33 @@ export class Game {
     ctx.closePath();
   }
 
-  private drawPuddingEyes(
+  private updateEyeBlink(body: Matter.Body, now: number): number {
+    initEyeBlink(body, now);
+    const st = body.plugin.eyeBlink as EyeBlinkState;
+    if (st.blinkUntil > 0 && now >= st.blinkUntil) {
+      st.blinkUntil = 0;
+    }
+    if (st.blinkUntil === 0 && now >= st.nextAt) {
+      st.blinkUntil = now + EYE_BLINK_DURATION_MS;
+      st.nextAt = st.blinkUntil + randomBlinkGap();
+    }
+    if (st.blinkUntil <= 0 || now >= st.blinkUntil) {
+      return 0;
+    }
+    const t0 = st.blinkUntil - EYE_BLINK_DURATION_MS;
+    const progress = Math.min(
+      1,
+      Math.max(0, (now - t0) / EYE_BLINK_DURATION_MS),
+    );
+    return Math.sin(Math.PI * progress);
+  }
+
+  private drawCharacterEyes(
     ctx: CanvasRenderingContext2D,
     self: Matter.Body,
-    puddings: Matter.Body[],
-    enemies: Matter.Body[],
+    gazeWorld: Matter.Vector | null,
+    now: number,
+    colors: { white: string; rim: string; pupil: string },
   ): void {
     const w = self.bounds.max.x - self.bounds.min.x;
     const h = self.bounds.max.y - self.bounds.min.y;
@@ -932,6 +982,72 @@ export class Game {
     const spread = w * 0.22;
     const yOff = -h * 0.1;
 
+    const squish = this.updateEyeBlink(self, now);
+
+    ctx.save();
+    ctx.translate(self.position.x, self.position.y);
+    ctx.rotate(self.angle);
+
+    const drawOneEye = (lx: number, ly: number) => {
+      const ry = eyeR * (1 - squish * 0.88) + eyeR * 0.1 * squish;
+      const rx = eyeR * (1 + squish * 0.08);
+
+      ctx.fillStyle = colors.white;
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, rx, Math.max(0.6, ry), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = colors.rim;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      if (squish < 0.55 && gazeWorld) {
+        const cos = Math.cos(self.angle);
+        const sin = Math.sin(self.angle);
+        const eyeWx = self.position.x + lx * cos - ly * sin;
+        const eyeWy = self.position.y + lx * sin + ly * cos;
+        const toGaze = Matter.Vector.sub(gazeWorld, {
+          x: eyeWx,
+          y: eyeWy,
+        });
+        const shifted = clampMag(toGaze, maxPupilShift);
+        const localOff = Matter.Vector.rotate(shifted, -self.angle);
+        const px = lx + localOff.x;
+        const py = ly + localOff.y;
+
+        ctx.fillStyle = colors.pupil;
+        ctx.beginPath();
+        ctx.arc(px, py, pupilR, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (squish < 0.55 && !gazeWorld) {
+        ctx.fillStyle = colors.pupil;
+        ctx.beginPath();
+        ctx.arc(lx, ly, pupilR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (squish > 0.35) {
+        ctx.strokeStyle = colors.rim;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(lx - rx * 0.85, ly);
+        ctx.lineTo(lx + rx * 0.85, ly);
+        ctx.stroke();
+      }
+    };
+
+    drawOneEye(-spread, yOff);
+    drawOneEye(spread, yOff);
+
+    ctx.restore();
+  }
+
+  private drawPuddingEyes(
+    ctx: CanvasRenderingContext2D,
+    self: Matter.Body,
+    puddings: Matter.Body[],
+    enemies: Matter.Body[],
+    now: number,
+  ): void {
     let gazeWorld: Matter.Vector | null = null;
 
     let bestEnemy: Matter.Body | null = null;
@@ -965,45 +1081,38 @@ export class Game {
       }
     }
 
-    ctx.save();
-    ctx.translate(self.position.x, self.position.y);
-    ctx.rotate(self.angle);
+    this.drawCharacterEyes(ctx, self, gazeWorld, now, {
+      white: "#f8fafc",
+      rim: "#0f172a",
+      pupil: "#0f172a",
+    });
+  }
 
-    const drawOneEye = (lx: number, ly: number) => {
-      let px = lx;
-      let py = ly;
-      if (gazeWorld) {
-        const cos = Math.cos(self.angle);
-        const sin = Math.sin(self.angle);
-        const eyeWx = self.position.x + lx * cos - ly * sin;
-        const eyeWy = self.position.y + lx * sin + ly * cos;
-        const toGaze = Matter.Vector.sub(gazeWorld, {
-          x: eyeWx,
-          y: eyeWy,
-        });
-        const shifted = clampMag(toGaze, maxPupilShift);
-        const localOff = Matter.Vector.rotate(shifted, -self.angle);
-        px = lx + localOff.x;
-        py = ly + localOff.y;
+  private drawEnemyEyes(
+    ctx: CanvasRenderingContext2D,
+    self: Matter.Body,
+    puddings: Matter.Body[],
+    now: number,
+  ): void {
+    let gazeWorld: Matter.Vector | null = null;
+    let bestD = ENEMY_EYE_PUDDING_RANGE + 1;
+    for (const p of puddings) {
+      const d = Matter.Vector.magnitude(
+        Matter.Vector.sub(p.position, self.position),
+      );
+      if (d < bestD && d <= ENEMY_EYE_PUDDING_RANGE) {
+        bestD = d;
+        gazeWorld = p.position;
       }
+    }
+    if (!gazeWorld) {
+      gazeWorld = { x: WIDTH / 2, y: GROUND_Y - 36 };
+    }
 
-      ctx.fillStyle = "#f8fafc";
-      ctx.beginPath();
-      ctx.arc(lx, ly, eyeR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#0f172a";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      ctx.fillStyle = "#0f172a";
-      ctx.beginPath();
-      ctx.arc(px, py, pupilR, 0, Math.PI * 2);
-      ctx.fill();
-    };
-
-    drawOneEye(-spread, yOff);
-    drawOneEye(spread, yOff);
-
-    ctx.restore();
+    this.drawCharacterEyes(ctx, self, gazeWorld, now, {
+      white: "#fff7ed",
+      rim: "#431407",
+      pupil: "#1c1917",
+    });
   }
 }
