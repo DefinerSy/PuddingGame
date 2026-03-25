@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>布丁塔防 · Pudding Stack</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="hud">
+        <div class="hud-row">
+          <span id="money">费用: 0</span>
+          <span id="wave">波次: 0</span>
+          <span id="base-hp">基地: 100</span>
+        </div>
+        <div class="hud-row shop">
+          <button type="button" id="btn-roll">老虎机 Roll</button>
+          <span id="roll-cost"></span>
+          <div id="slots" class="slots"></div>
+          <button type="button" id="btn-refresh">刷新陈列</button>
+          <span id="refresh-cost"></span>
+        </div>
+        <p class="hint">
+          A/D 或 ←/→ 移动吊机 · 空格抓取/释放 · 仅绿色区域可着地，红区落地会销毁
+        </p>
+      </header>
+      <canvas id="game" width="1200" height="640"></canvas>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
