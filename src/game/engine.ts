@@ -50,7 +50,6 @@ import {
   drawBaseCasual,
   drawBulletCasual,
   drawEnemyCasual,
-  drawGameOverBanner,
   drawGroundCasual,
   drawHealthBarPill,
   drawHookCasual,
@@ -58,8 +57,25 @@ import {
   drawRopeCasual,
   drawSkyAndZones,
 } from "./canvasArt";
+import {
+  gameToScreen,
+  pulseElement,
+  spawnFloatText,
+  spawnFlyToElement,
+} from "./fxDom";
 
 const { Engine, Bodies, Body, Events, Composite, Constraint, Runner } = Matter;
+
+interface DefeatParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  r: number;
+  color: string;
+}
 
 const CAT_GROUND = 0x0001;
 const CAT_BLOCK = 0x0002;
@@ -145,6 +161,9 @@ export class Game {
   private wave = 0;
   private waveTimer = WAVE_INTERVAL_MS - WAVE_START_DELAY_MS;
   private gameOver = false;
+  private defeatFxTriggered = false;
+  private defeatParticles: DefeatParticle[] = [];
+  private lastDrawTime = performance.now();
 
   private shopSlots: BlockKind[] = [];
   private shopFilled = false;
@@ -161,6 +180,14 @@ export class Game {
   private btnLeft = document.getElementById("btn-left") as HTMLButtonElement | null;
   private btnRight = document.getElementById("btn-right") as HTMLButtonElement | null;
   private btnGrab = document.getElementById("btn-grab") as HTMLButtonElement | null;
+  private fxOverlay =
+    document.getElementById("fx-overlay") ?? document.body;
+  private gameOverVeil = document.getElementById(
+    "game-over-veil",
+  ) as HTMLElement | null;
+  private statCoinsPill = document.querySelector(
+    ".stat-pill.stat-coins",
+  ) as HTMLElement;
 
   private ground!: Matter.Body;
   private hook!: Matter.Body;
@@ -478,6 +505,7 @@ export class Game {
     if (this.baseHp <= 0) {
       this.baseHp = 0;
       this.gameOver = true;
+      this.triggerDefeatFx();
     }
     this.updateHud();
   }
@@ -551,6 +579,7 @@ export class Game {
     this.passiveIncomeFrac -= whole;
     this.money += whole;
     this.updateHud();
+    this.showPassiveIncomeFx(whole);
   }
 
   private tickPuddings(dt: number): void {
@@ -566,6 +595,7 @@ export class Game {
           data.produceAccumulator = 0;
           this.money += PRODUCER_AMOUNT;
           this.updateHud();
+          this.showProducerIncomeFx(body);
         }
       }
 
@@ -817,6 +847,76 @@ export class Game {
     return body;
   }
 
+  private showPassiveIncomeFx(amount: number): void {
+    if (amount <= 0 || !this.statCoinsPill) return;
+    const rect = this.statCoinsPill.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height * 0.35;
+    spawnFloatText(
+      this.fxOverlay,
+      cx,
+      cy,
+      `+${amount}`,
+      "fx-passive",
+    );
+    pulseElement(this.statCoinsPill, "fx-pulse-money");
+  }
+
+  private showProducerIncomeFx(body: Matter.Body): void {
+    if (!this.statCoinsPill) return;
+    const { x, y } = gameToScreen(this.canvas, body.position.x, body.position.y - 28);
+    spawnFloatText(this.fxOverlay, x, y, `+${PRODUCER_AMOUNT}`, "fx-producer-pop");
+    spawnFlyToElement(
+      this.fxOverlay,
+      x,
+      y - 18,
+      this.statCoinsPill,
+      `+${PRODUCER_AMOUNT} 🪙`,
+      "fx-fly-producer",
+    );
+    pulseElement(this.statCoinsPill, "fx-pulse-money");
+  }
+
+  private triggerDefeatFx(): void {
+    if (this.defeatFxTriggered) return;
+    this.defeatFxTriggered = true;
+
+    const bx = this.baseBody.position.x;
+    const by = this.baseBody.position.y;
+    const colors = [
+      "#8fb4ff",
+      "#6b8ef0",
+      "#c4d4ff",
+      "#fff59d",
+      "#ffffff",
+      "#a5b4fc",
+    ];
+    for (let i = 0; i < 64; i++) {
+      const ang = (Math.PI * 2 * i) / 64 + Math.random() * 0.5;
+      const sp = 2.5 + Math.random() * 5.5;
+      const maxLife = 900 + Math.random() * 500;
+      this.defeatParticles.push({
+        x: bx + (Math.random() - 0.5) * 28,
+        y: by + (Math.random() - 0.5) * 28,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 2.2,
+        life: maxLife,
+        maxLife,
+        r: 3 + Math.random() * 5,
+        color: colors[Math.floor(Math.random() * colors.length)]!,
+      });
+    }
+
+    Composite.remove(this.world, this.baseBody);
+    if (this.gameOverVeil) {
+      this.gameOverVeil.hidden = false;
+    }
+    document.body.classList.add("game-over-shake");
+    window.setTimeout(() => {
+      document.body.classList.remove("game-over-shake");
+    }, 520);
+  }
+
   private updateHud(): void {
     this.moneyEl.textContent = String(this.money);
     this.waveEl.textContent = String(this.wave);
@@ -862,6 +962,9 @@ export class Game {
 
   private draw(): void {
     const now = performance.now();
+    const dtDraw = Math.min(48, Math.max(0, now - this.lastDrawTime));
+    this.lastDrawTime = now;
+
     const ctx = this.ctx;
     const safeMin = this.craneX - SAFE_HALF_WIDTH;
     const safeMax = this.craneX + SAFE_HALF_WIDTH;
@@ -978,10 +1081,33 @@ export class Game {
 
     drawHookCasual(ctx, this.hook.position.x, this.hook.position.y);
 
-    drawGameOverBanner(
-      ctx,
-      this.gameOver ? "基地被攻破 — 刷新页面重开" : "",
-    );
+    this.tickAndDrawDefeatParticles(ctx, dtDraw);
+  }
+
+  private tickAndDrawDefeatParticles(
+    ctx: CanvasRenderingContext2D,
+    dtMs: number,
+  ): void {
+    if (this.defeatParticles.length === 0) return;
+    const g = dtMs / 16.67;
+    this.defeatParticles = this.defeatParticles.filter((p) => {
+      p.life -= dtMs;
+      p.x += p.vx * g;
+      p.y += p.vy * g;
+      p.vy += 0.14 * g;
+      p.vx *= Math.pow(0.992, g);
+      return p.life > 0;
+    });
+    for (const p of this.defeatParticles) {
+      const a = Math.max(0, p.life / p.maxLife);
+      ctx.save();
+      ctx.globalAlpha = a * 0.95;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   private updateEyeBlink(body: Matter.Body, now: number): number {

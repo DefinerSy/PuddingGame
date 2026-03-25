@@ -59,8 +59,17 @@
           绿区可着地，红区落地会销毁
         </p>
       </header>
-      <div class="game-wrap">
-        <canvas id="game" width="1200" height="640"></canvas>
+      <div id="fx-overlay" class="fx-overlay" aria-hidden="true"></div>
+      <div class="game-stage">
+        <div class="game-wrap">
+          <canvas id="game" width="1200" height="640"></canvas>
+        </div>
+        <div id="game-over-veil" class="game-over-veil" hidden>
+          <div class="game-over-card">
+            <p class="game-over-title">基地被攻破</p>
+            <p class="game-over-hint">刷新页面重新开始</p>
+          </div>
+        </div>
       </div>
       <div class="mobile-controls" aria-label="触屏操作">
         <button
