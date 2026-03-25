@@ -257,10 +257,45 @@ export class Game {
 
   private bindInput(): void {
     window.addEventListener("keydown", (e) => {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+
       this.keys.add(e.code);
       if (e.code === "Space") {
         e.preventDefault();
         this.toggleGrab();
+        return;
+      }
+
+      if (e.repeat) return;
+
+      if (e.code === "KeyR") {
+        e.preventDefault();
+        this.rollShop();
+        return;
+      }
+      if (e.code === "Digit1") {
+        e.preventDefault();
+        this.takeFromSlot(0);
+        return;
+      }
+      if (e.code === "Digit2") {
+        e.preventDefault();
+        this.takeFromSlot(1);
+        return;
+      }
+      if (e.code === "Digit3") {
+        e.preventDefault();
+        this.takeFromSlot(2);
+        return;
       }
     });
     window.addEventListener("keyup", (e) => {
