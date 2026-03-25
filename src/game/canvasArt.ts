@@ -1,5 +1,5 @@
 import type Matter from "matter-js";
-import type { BlockKind } from "./types";
+import type { BlockKind, EnemyKind } from "./types";
 import { GROUND_Y, WIDTH, HEIGHT } from "./config";
 
 export function roundRectPath(
@@ -215,12 +215,46 @@ export function drawPuddingCasual(
   ctx.restore();
 }
 
+const ENEMY_STYLE: Record<
+  EnemyKind,
+  { light: string; mid: string; dark: string; stroke: string }
+> = {
+  runner: {
+    light: "#fef9c3",
+    mid: "#fde047",
+    dark: "#ca8a04",
+    stroke: "rgba(133, 77, 14, 0.75)",
+  },
+  grunt: {
+    light: "#fecdd3",
+    mid: "#fda4af",
+    dark: "#f472b6",
+    stroke: "rgba(157, 23, 77, 0.65)",
+  },
+  brute: {
+    light: "#e9d5ff",
+    mid: "#c084fc",
+    dark: "#7c3aed",
+    stroke: "rgba(88, 28, 135, 0.75)",
+  },
+  rusher: {
+    light: "#fecaca",
+    mid: "#f87171",
+    dark: "#dc2626",
+    stroke: "rgba(127, 29, 29, 0.7)",
+  },
+};
+
 export function drawEnemyCasual(
   ctx: CanvasRenderingContext2D,
   body: Matter.Body,
+  kind: EnemyKind,
+  displayW: number,
+  displayH: number,
 ): void {
-  const w = body.bounds.max.x - body.bounds.min.x;
-  const h = body.bounds.max.y - body.bounds.min.y;
+  const w = displayW;
+  const h = displayH;
+  const st = ENEMY_STYLE[kind];
   ctx.save();
   ctx.translate(body.position.x, body.position.y);
   ctx.rotate(body.angle);
@@ -230,13 +264,13 @@ export function drawEnemyCasual(
   roundRectPath(ctx, x, y, w, h, rr);
 
   const g = ctx.createRadialGradient(w * 0.1, y + h * 0.3, 2, 0, y + h * 0.35, w * 0.9);
-  g.addColorStop(0, "#fecdd3");
-  g.addColorStop(0.5, "#fda4af");
-  g.addColorStop(1, "#f472b6");
+  g.addColorStop(0, st.light);
+  g.addColorStop(0.5, st.mid);
+  g.addColorStop(1, st.dark);
   ctx.fillStyle = g;
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(157, 23, 77, 0.65)";
+  ctx.strokeStyle = st.stroke;
   ctx.lineWidth = 2;
   ctx.stroke();
 

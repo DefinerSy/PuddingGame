@@ -48,13 +48,12 @@ export const SHOOTER_HP = 68;
 export const PRODUCER_BLOCK_HP = 72;
 export const DEFENDER_HP = 220;
 
-/** 敌人：基础生命；每波指数成长略缓，避免后期指数爆炸 */
+/** 敌人：基础生命；每波指数成长；具体种类另有倍率 */
 export const ENEMY_HP = 40;
 export const ENEMY_HP_WAVE_MULT = 1.055;
 export const ENEMY_SPEED = 1.08;
-/** 敌人啃基地：略降单次伤害、略提基地血，给 2～3 只同时贴脸时的反应时间 */
+/** 无种类数据时的默认啃咬（grunt） */
 export const ENEMY_DAMAGE = 7;
-/** 敌人持续接触我方布丁时约每 450ms 结算一次 */
 export const ENEMY_DAMAGE_TO_PUDDING = 4;
 export const BASE_MAX_HP = 128;
 

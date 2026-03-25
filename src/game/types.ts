@@ -1,5 +1,8 @@
 export type BlockKind = "shooter" | "defender" | "producer";
 
+/** 敌人种类：后期波次混合刷新加压 */
+export type EnemyKind = "runner" | "grunt" | "brute" | "rusher";
+
 export interface PuddingData {
   kind: BlockKind;
   hp: number;
@@ -23,4 +26,11 @@ export interface PuddingData {
 export interface EnemyData {
   hp: number;
   maxHp: number;
+  kind: EnemyKind;
+  /** 水平移速（与 ENEMY_SPEED 相乘后的实际值） */
+  moveSpeed: number;
+  damageToBase: number;
+  damageToPudding: number;
+  displayW: number;
+  displayH: number;
 }

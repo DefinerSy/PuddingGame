@@ -11,7 +11,6 @@ import {
   ENEMY_DAMAGE,
   ENEMY_DAMAGE_TO_PUDDING,
   ENEMY_HP,
-  ENEMY_HP_WAVE_MULT,
   ENEMY_SPEED,
   ENEMY_EYE_PUDDING_RANGE,
   EYE_BLINK_DURATION_MS,
@@ -56,6 +55,12 @@ import {
   WAVE_START_DELAY_MS,
   WIDTH,
 } from "./config";
+import {
+  createEnemyPluginData,
+  enemySpawnCenterY,
+  ENEMY_KIND_DEFS,
+  pickEnemyKind,
+} from "./enemies";
 import type { BlockKind, EnemyData, PuddingData } from "./types";
 import {
   drawBaseCasual,
@@ -741,7 +746,8 @@ export class Game {
     const last = this.enemyHitBaseCooldown.get(id) ?? 0;
     if (now - last < 500) return;
     this.enemyHitBaseCooldown.set(id, now);
-    this.baseHp -= ENEMY_DAMAGE;
+    const ed = enemy.plugin.puddingEnemy as EnemyData | undefined;
+    this.baseHp -= ed?.damageToBase ?? ENEMY_DAMAGE;
     if (this.baseHp <= 0) {
       this.baseHp = 0;
       this.gameOver = true;
@@ -763,13 +769,16 @@ export class Game {
     const data = pud.plugin.pudding as PuddingData | undefined;
     if (!data) return;
 
+    const ed = enemy.plugin.puddingEnemy as EnemyData | undefined;
+    const chip = ed?.damageToPudding ?? ENEMY_DAMAGE_TO_PUDDING;
+
     const key = `${enemy.id}-${pud.id}`;
     const last = this.enemyHitPuddingCooldown.get(key) ?? 0;
     if (now - last < 450) return;
     this.enemyHitPuddingCooldown.set(key, now);
 
     const pm = data.powerMult ?? 1;
-    data.hp -= ENEMY_DAMAGE_TO_PUDDING / pm;
+    data.hp -= chip / pm;
     if (data.hp <= 0) {
       this.detachAndRemovePudding(pud);
     }
@@ -915,9 +924,11 @@ export class Game {
     const bodies = Composite.allBodies(this.world);
     for (const body of bodies) {
       if (body.label !== LABEL_ENEMY) continue;
+      const ed = body.plugin.puddingEnemy as EnemyData | undefined;
+      const spd = ed?.moveSpeed ?? ENEMY_SPEED;
       const toward = targetX - body.position.x;
       const sign = toward === 0 ? 0 : toward > 0 ? 1 : -1;
-      Body.setVelocity(body, { x: sign * ENEMY_SPEED, y: body.velocity.y });
+      Body.setVelocity(body, { x: sign * spd, y: body.velocity.y });
     }
   }
 
@@ -937,21 +948,24 @@ export class Game {
   }
 
   private spawnEnemy(x: number, fromLeft: boolean): void {
-    const body = Bodies.rectangle(x, GROUND_Y - 50, 34, 40, {
+    const kind = pickEnemyKind(this.wave);
+    const def = ENEMY_KIND_DEFS[kind];
+    const cy = enemySpawnCenterY(GROUND_Y, def.h);
+    const body = Bodies.rectangle(x, cy, def.w, def.h, {
       label: LABEL_ENEMY,
-      frictionAir: 0.02,
+      frictionAir: def.frictionAir,
+      density: def.density,
       collisionFilter: {
         category: CAT_ENEMY,
         mask: CAT_GROUND | CAT_BLOCK | CAT_BASE | CAT_BULLET,
       },
     });
-    const maxHp =
-      ENEMY_HP * ENEMY_HP_WAVE_MULT ** Math.max(0, this.wave - 1);
-    body.plugin.puddingEnemy = {
-      hp: maxHp,
-      maxHp,
-    } satisfies EnemyData;
-    Body.setVelocity(body, { x: fromLeft ? ENEMY_SPEED : -ENEMY_SPEED, y: 0 });
+    const data = createEnemyPluginData(kind, this.wave);
+    body.plugin.puddingEnemy = data;
+    Body.setVelocity(body, {
+      x: fromLeft ? data.moveSpeed : -data.moveSpeed,
+      y: 0,
+    });
     Composite.add(this.world, body);
   }
 
@@ -1365,20 +1379,23 @@ export class Game {
           continue;
         }
         if (body.label === LABEL_ENEMY) {
-          drawEnemyCasual(ctx, body);
           const ed = body.plugin.puddingEnemy as EnemyData | undefined;
+          const ek = ed?.kind ?? "grunt";
+          const ew = ed?.displayW ?? 34;
+          const eh = ed?.displayH ?? 40;
+          drawEnemyCasual(ctx, body, ek, ew, eh);
           if (ed) {
             const t = ed.hp / (ed.maxHp > 0 ? ed.maxHp : ENEMY_HP);
             drawHealthBarPill(
               ctx,
               body.position.x,
-              body.bounds.min.y,
-              38,
+              body.position.y - eh / 2 - 4,
+              Math.min(42, ew + 4),
               Math.max(0, t),
               "foe",
             );
           }
-          this.drawEnemyEyes(ctx, body, puddingBodies, now);
+          this.drawEnemyEyes(ctx, body, puddingBodies, now, ew, eh);
           continue;
         }
         if (body.label === LABEL_BULLET) {
@@ -1598,6 +1615,8 @@ export class Game {
     self: Matter.Body,
     puddings: Matter.Body[],
     now: number,
+    displayW: number,
+    displayH: number,
   ): void {
     let gazeWorld: Matter.Vector | null = null;
     let bestD = ENEMY_EYE_PUDDING_RANGE + 1;
@@ -1614,10 +1633,19 @@ export class Game {
       gazeWorld = { x: WIDTH / 2, y: GROUND_Y - 36 };
     }
 
-    this.drawCharacterEyes(ctx, self, gazeWorld, now, {
-      white: "#fffbeb",
-      rim: "#78350f",
-      pupil: "#422006",
-    });
+    this.drawCharacterEyes(
+      ctx,
+      self,
+      gazeWorld,
+      now,
+      {
+        white: "#fffbeb",
+        rim: "#78350f",
+        pupil: "#422006",
+      },
+      0,
+      displayW,
+      displayH,
+    );
   }
 }
