@@ -31,6 +31,8 @@ export const DEFENDER_HP = 200;
 export const ENEMY_HP = 40;
 export const ENEMY_SPEED = 1.2;
 export const ENEMY_DAMAGE = 8;
+/** 敌人持续接触我方布丁时每秒结算约 60/450 次，单次伤害 */
+export const ENEMY_DAMAGE_TO_PUDDING = 5;
 export const BASE_MAX_HP = 100;
 
 export const WAVE_INTERVAL_MS = 14000;

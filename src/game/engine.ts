@@ -8,6 +8,7 @@ import {
   DEFENDER_HP,
   ENEMIES_PER_SIDE_BASE,
   ENEMY_DAMAGE,
+  ENEMY_DAMAGE_TO_PUDDING,
   ENEMY_HP,
   ENEMY_SPEED,
   GROUND_THICK,
@@ -89,6 +90,7 @@ export class Game {
   private shopFilled = false;
 
   private enemyHitBaseCooldown = new Map<number, number>();
+  private enemyHitPuddingCooldown = new Map<string, number>();
 
   private moneyEl = document.getElementById("money")!;
   private waveEl = document.getElementById("wave")!;
@@ -286,6 +288,21 @@ export class Game {
       const now = performance.now();
       for (const pair of ev.pairs) {
         this.handleEnemyBase(pair.bodyA, pair.bodyB, now);
+        this.handleEnemyPudding(pair.bodyA, pair.bodyB, now);
+      }
+    });
+
+    Events.on(this.engine, "collisionEnd", (ev: Matter.IEventCollision<Matter.Engine>) => {
+      for (const pair of ev.pairs) {
+        const a = pair.bodyA;
+        const b = pair.bodyB;
+        const enemy =
+          a.label === LABEL_ENEMY ? a : b.label === LABEL_ENEMY ? b : null;
+        const pud =
+          a.label === LABEL_PUDDING ? a : b.label === LABEL_PUDDING ? b : null;
+        if (enemy && pud) {
+          this.enemyHitPuddingCooldown.delete(`${enemy.id}-${pud.id}`);
+        }
       }
     });
   }
@@ -345,6 +362,38 @@ export class Game {
       this.gameOver = true;
     }
     this.updateHud();
+  }
+
+  private handleEnemyPudding(
+    a: Matter.Body,
+    b: Matter.Body,
+    now: number,
+  ): void {
+    const enemy =
+      a.label === LABEL_ENEMY ? a : b.label === LABEL_ENEMY ? b : null;
+    const pud =
+      a.label === LABEL_PUDDING ? a : b.label === LABEL_PUDDING ? b : null;
+    if (!enemy || !pud || this.gameOver) return;
+    const data = pud.plugin.pudding as PuddingData | undefined;
+    if (!data) return;
+
+    const key = `${enemy.id}-${pud.id}`;
+    const last = this.enemyHitPuddingCooldown.get(key) ?? 0;
+    if (now - last < 450) return;
+    this.enemyHitPuddingCooldown.set(key, now);
+
+    data.hp -= ENEMY_DAMAGE_TO_PUDDING;
+    if (data.hp <= 0) {
+      this.destroyPudding(pud);
+    }
+  }
+
+  private destroyPudding(p: Matter.Body): void {
+    if (this.grabConstraint?.bodyB === p) {
+      this.releaseGrab();
+      this.renderShop();
+    }
+    Composite.remove(this.world, p);
   }
 
   private onBeforeUpdate(): void {
@@ -750,15 +799,16 @@ export class Game {
         ctx.strokeStyle = "#1e293b";
         this.drawBodyRect(ctx, body);
         const data = body.plugin.pudding as PuddingData | undefined;
-        if (data && data.kind === "defender" && data.hp < data.maxHp) {
-          const t = data.hp / data.maxHp;
-          ctx.fillStyle = "#ef4444";
-          ctx.fillRect(
-            body.position.x - 24,
-            body.position.y - 36,
-            48 * t,
-            4,
-          );
+        if (data && data.hp < data.maxHp) {
+          const bw = body.bounds.max.x - body.bounds.min.x;
+          const barW = Math.min(56, Math.max(28, bw - 6));
+          const top = body.bounds.min.y;
+          const left = body.position.x - barW / 2;
+          const t = Math.max(0, data.hp / data.maxHp);
+          ctx.fillStyle = "#1e293b";
+          ctx.fillRect(left, top - 9, barW, 5);
+          ctx.fillStyle = t > 0.35 ? "#22c55e" : "#ef4444";
+          ctx.fillRect(left, top - 9, barW * t, 5);
         }
         continue;
       }
