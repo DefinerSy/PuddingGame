@@ -1,6 +1,9 @@
 import Matter from "matter-js";
 import {
   BASE_MAX_HP,
+  BASE_DEFENSE_DAMAGE,
+  BASE_DEFENSE_INTERVAL_MS,
+  BASE_DEFENSE_RANGE,
   BASE_UPGRADE_COST_BASE,
   BASE_UPGRADE_COST_PER_LEVEL,
   BASE_UPGRADE_HOOK_LIFT,
@@ -208,6 +211,8 @@ export class Game {
   private money = START_MONEY;
   private passiveIncomeFrac = 0;
   private baseHp = BASE_MAX_HP;
+  /** 基地自卫炮冷却累积 */
+  private baseDefenseAccumulator = 0;
   private wave = 0;
   private waveTimer = WAVE_INTERVAL_MS - WAVE_START_DELAY_MS;
   private gameOver = false;
@@ -1229,6 +1234,7 @@ export class Game {
     const dt = 1000 / 60;
     this.tickPassiveIncome(dt);
     this.tickPuddings(dt);
+    this.tickBaseDefense(dt);
     this.tickPuddingJiggle(dt);
     this.tickEnemies();
     this.tickWaves(dt);
@@ -1286,6 +1292,62 @@ export class Game {
         }
       }
     }
+  }
+
+  /** 基地向射程内最近敌人发射弱弹（不占方块，缓解开局无射手压力） */
+  private tickBaseDefense(dt: number): void {
+    if (this.gameOver || this.isChestPickOpen()) return;
+    this.baseDefenseAccumulator += dt;
+    if (this.baseDefenseAccumulator < BASE_DEFENSE_INTERVAL_MS) return;
+    this.baseDefenseAccumulator = 0;
+
+    const bodies = Composite.allBodies(this.world);
+    const enemies = bodies.filter((b) => b.label === LABEL_ENEMY);
+    if (enemies.length === 0) return;
+
+    const origin = this.baseBody.position;
+    const range = BASE_DEFENSE_RANGE;
+    let best: Matter.Body | null = null;
+    let bestD = range + 1;
+    for (const e of enemies) {
+      const d = Matter.Vector.magnitude(
+        Matter.Vector.sub(e.position, origin),
+      );
+      if (d <= range && d < bestD) {
+        bestD = d;
+        best = e;
+      }
+    }
+    if (!best) return;
+
+    let dir = Matter.Vector.normalise(
+      Matter.Vector.sub(best.position, origin),
+    );
+    if (Matter.Vector.magnitude(dir) < 1e-6) {
+      dir = { x: 1, y: 0 };
+    }
+    const bullet = Bodies.circle(
+      origin.x + dir.x * 44,
+      origin.y + dir.y * 44,
+      5.5,
+      {
+        label: LABEL_BULLET,
+        frictionAir: 0,
+        restitution: 0,
+        density: 0.001,
+        collisionFilter: {
+          category: CAT_BULLET,
+          mask: CAT_ENEMY,
+        },
+      },
+    );
+    bullet.plugin.bulletDmg = BASE_DEFENSE_DAMAGE;
+    Body.setVelocity(bullet, {
+      x: dir.x * 11.5,
+      y: dir.y * 11.5,
+    });
+    bullet.plugin.lifeMs = 2400;
+    Composite.add(this.world, bullet);
   }
 
   private heightBonus(body: Matter.Body): number {

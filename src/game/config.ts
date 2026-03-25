@@ -57,6 +57,13 @@ export const ENEMY_DAMAGE = 7;
 export const ENEMY_DAMAGE_TO_PUDDING = 4;
 export const BASE_MAX_HP = 128;
 
+/**
+ * 基地自卫：开局无射手时仍能清近身敌人（弱于射手布丁，不占方块位）
+ */
+export const BASE_DEFENSE_INTERVAL_MS = 1050;
+export const BASE_DEFENSE_RANGE = 268;
+export const BASE_DEFENSE_DAMAGE = 8;
+
 /** 基地升级：每级增加天空高度、吊机更高、敌人生成更远、镜头略拉远 */
 export const BASE_UPGRADE_MAX_LEVEL = 4;
 export const BASE_UPGRADE_COST_BASE = 95;
