@@ -163,17 +163,14 @@ const PUDDING_GRAD: Record<
   },
 };
 
-export function drawPuddingCasual(
+/** 在已 translate/rotate/scale 到布丁局部坐标后绘制本体（中心为 0,0） */
+export function drawPuddingBodyLocal(
   ctx: CanvasRenderingContext2D,
-  body: Matter.Body,
+  w: number,
+  h: number,
   kind: BlockKind,
 ): void {
-  const w = body.bounds.max.x - body.bounds.min.x;
-  const h = body.bounds.max.y - body.bounds.min.y;
   const pal = PUDDING_GRAD[kind];
-  ctx.save();
-  ctx.translate(body.position.x, body.position.y);
-  ctx.rotate(body.angle);
   const x = -w / 2;
   const y = -h / 2;
   const rr = Math.min(12, w * 0.18, h * 0.22);
@@ -202,7 +199,19 @@ export function drawPuddingCasual(
   ctx.ellipse(-w * 0.28, y + h * 0.42, w * 0.1, h * 0.07, 0, 0, Math.PI * 2);
   ctx.ellipse(w * 0.28, y + h * 0.42, w * 0.1, h * 0.07, 0, 0, Math.PI * 2);
   ctx.fill();
+}
 
+export function drawPuddingCasual(
+  ctx: CanvasRenderingContext2D,
+  body: Matter.Body,
+  kind: BlockKind,
+): void {
+  const w = body.bounds.max.x - body.bounds.min.x;
+  const h = body.bounds.max.y - body.bounds.min.y;
+  ctx.save();
+  ctx.translate(body.position.x, body.position.y);
+  ctx.rotate(body.angle);
+  drawPuddingBodyLocal(ctx, w, h, kind);
   ctx.restore();
 }
 

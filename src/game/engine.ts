@@ -32,6 +32,13 @@ import {
   PASSIVE_INCOME_PER_MINUTE,
   PRODUCER_BLOCK_HP,
   PUDDING_EYE_ENEMY_RANGE,
+  PUDDING_HELD_SWAY_AMP,
+  PUDDING_IDLE_WOBBLE_AMP,
+  PUDDING_IDLE_WOBBLE_SPEED,
+  PUDDING_JIGGLE_DAMPING,
+  PUDDING_JIGGLE_IMPACT_THRESHOLD,
+  PUDDING_JIGGLE_IMPULSE_CAP,
+  PUDDING_JIGGLE_SPRING,
   PUDDING_EYE_NEIGHBOR_RANGE,
   START_MONEY,
   TAKE_COST,
@@ -48,7 +55,7 @@ import {
   drawGroundCasual,
   drawHealthBarPill,
   drawHookCasual,
-  drawPuddingCasual,
+  drawPuddingBodyLocal,
   drawRopeCasual,
   drawSkyAndZones,
 } from "./canvasArt";
@@ -339,6 +346,7 @@ export class Game {
         const { bodyA, bodyB } = pair;
         this.handleSupportLanding(bodyA, bodyB);
         this.handleBulletHit(bodyA, bodyB);
+        this.applyPuddingJiggleFromPair(pair);
       }
     });
 
@@ -366,6 +374,52 @@ export class Game {
   }
 
   /** 布丁落在地面时需落在吊机安全区；落在核心上任意位置均可搭建 */
+  private applyPuddingJiggleFromPair(pair: Matter.Pair): void {
+    const col = pair.collision;
+    if (!col?.collided) return;
+    const a = pair.bodyA;
+    const b = pair.bodyB;
+    const n = col.normal;
+    const rel = Matter.Vector.sub(b.velocity, a.velocity);
+    const approach = Math.abs(Matter.Vector.dot(rel, n));
+    if (approach < PUDDING_JIGGLE_IMPACT_THRESHOLD) return;
+    const impulse = Math.min(
+      PUDDING_JIGGLE_IMPULSE_CAP,
+      approach * 0.55,
+    );
+    for (const body of [a, b]) {
+      if (body.label !== LABEL_PUDDING) continue;
+      const data = body.plugin.pudding as PuddingData | undefined;
+      if (!data) continue;
+      data.jiggleV += impulse;
+    }
+  }
+
+  private tickPuddingJiggle(dt: number): void {
+    const dtSec = dt / 1000;
+    const bodies = Composite.allBodies(this.world);
+    for (const body of bodies) {
+      if (body.label !== LABEL_PUDDING) continue;
+      const data = body.plugin.pudding as PuddingData | undefined;
+      if (!data) continue;
+      if (data.jiggleX === undefined) {
+        data.jiggleX = 0;
+        data.jiggleV = 0;
+        data.idlePhase = Math.random() * Math.PI * 2;
+      }
+      const k = PUDDING_JIGGLE_SPRING;
+      const d = PUDDING_JIGGLE_DAMPING;
+      data.jiggleV += (-k * data.jiggleX - d * data.jiggleV) * dtSec;
+      data.jiggleX += data.jiggleV * dtSec;
+
+      const spd = Matter.Vector.magnitude(body.velocity);
+      const av = Math.abs(body.angularVelocity);
+      if (spd < 0.18 && av < 0.06) {
+        data.idlePhase += PUDDING_IDLE_WOBBLE_SPEED * dtSec;
+      }
+    }
+  }
+
   private handleSupportLanding(a: Matter.Body, b: Matter.Body): void {
     const p =
       a.label === LABEL_PUDDING ? a : b.label === LABEL_PUDDING ? b : null;
@@ -487,6 +541,7 @@ export class Game {
     const dt = 1000 / 60;
     this.tickPassiveIncome(dt);
     this.tickPuddings(dt);
+    this.tickPuddingJiggle(dt);
     this.tickEnemies();
     this.tickWaves(dt);
     this.tickBullets();
@@ -767,6 +822,9 @@ export class Game {
       maxHp,
       shootAccumulator: 0,
       produceAccumulator: 0,
+      jiggleX: 0,
+      jiggleV: 0,
+      idlePhase: Math.random() * Math.PI * 2,
     };
     body.plugin.pudding = data;
     body.plugin.puddingKind = kind;
@@ -843,21 +901,58 @@ export class Game {
         }
         if (body.label === LABEL_PUDDING) {
           const kind = body.plugin.puddingKind as BlockKind;
-          drawPuddingCasual(ctx, body, kind);
           const data = body.plugin.pudding as PuddingData | undefined;
+          const w = body.bounds.max.x - body.bounds.min.x;
+          const h = body.bounds.max.y - body.bounds.min.y;
+          const held = this.grabConstraint?.bodyB === body;
+          const spd = Matter.Vector.magnitude(body.velocity);
+          const av = Math.abs(body.angularVelocity);
+          const idleOk = spd < 0.18 && av < 0.06;
+          const idleWobble = idleOk
+            ? Math.sin(data?.idlePhase ?? 0) * PUDDING_IDLE_WOBBLE_AMP
+            : 0;
+          let heldTilt = 0;
+          if (held) {
+            const pull =
+              (this.hook.position.x - body.position.x) / Math.max(220, h * 5);
+            heldTilt = Math.max(
+              -PUDDING_HELD_SWAY_AMP,
+              Math.min(PUDDING_HELD_SWAY_AMP, pull * 0.22),
+            );
+          }
+          const jx = data?.jiggleX ?? 0;
+          const squash = Math.max(0, jx) * 0.1;
+          const stretch = Math.max(0, -jx) * 0.07;
+          const scaleX = 1 + squash * 0.38 - stretch * 0.22;
+          const scaleY = 1 - squash + stretch * 0.45;
+
+          ctx.save();
+          ctx.translate(body.position.x, body.position.y);
+          ctx.rotate(body.angle + idleWobble + heldTilt);
+          ctx.scale(scaleX, scaleY);
+          drawPuddingBodyLocal(ctx, w, h, kind);
+          ctx.restore();
+
           if (data && data.hp < data.maxHp) {
-            const bw = body.bounds.max.x - body.bounds.min.x;
-            const barW = Math.min(56, Math.max(28, bw - 6));
+            const barW = Math.min(56, Math.max(28, w - 6));
+            const topY = body.position.y - (h * scaleY) / 2 - 4;
             drawHealthBarPill(
               ctx,
               body.position.x,
-              body.bounds.min.y,
+              topY,
               barW,
               Math.max(0, data.hp / data.maxHp),
               "friendly",
             );
           }
-          this.drawPuddingEyes(ctx, body, puddingBodies, enemyBodies, now);
+          this.drawPuddingEyes(
+            ctx,
+            body,
+            puddingBodies,
+            enemyBodies,
+            now,
+            idleWobble + heldTilt,
+          );
           continue;
         }
         if (body.label === LABEL_ENEMY) {
@@ -933,6 +1028,7 @@ export class Game {
     gazeWorld: Matter.Vector | null,
     now: number,
     colors: { white: string; rim: string; pupil: string },
+    extraAngle = 0,
   ): void {
     const w = self.bounds.max.x - self.bounds.min.x;
     const h = self.bounds.max.y - self.bounds.min.y;
@@ -943,10 +1039,11 @@ export class Game {
     const yOff = -h * 0.1;
 
     const squish = this.updateEyeBlink(self, now);
+    const drawAngle = self.angle + extraAngle;
 
     ctx.save();
     ctx.translate(self.position.x, self.position.y);
-    ctx.rotate(self.angle);
+    ctx.rotate(drawAngle);
 
     const drawOneEye = (lx: number, ly: number) => {
       const ry = eyeR * (1 - squish * 0.88) + eyeR * 0.1 * squish;
@@ -961,8 +1058,8 @@ export class Game {
       ctx.stroke();
 
       if (squish < 0.55 && gazeWorld) {
-        const cos = Math.cos(self.angle);
-        const sin = Math.sin(self.angle);
+        const cos = Math.cos(drawAngle);
+        const sin = Math.sin(drawAngle);
         const eyeWx = self.position.x + lx * cos - ly * sin;
         const eyeWy = self.position.y + lx * sin + ly * cos;
         const toGaze = Matter.Vector.sub(gazeWorld, {
@@ -970,7 +1067,7 @@ export class Game {
           y: eyeWy,
         });
         const shifted = clampMag(toGaze, maxPupilShift);
-        const localOff = Matter.Vector.rotate(shifted, -self.angle);
+        const localOff = Matter.Vector.rotate(shifted, -drawAngle);
         const px = lx + localOff.x;
         const py = ly + localOff.y;
 
@@ -1007,6 +1104,7 @@ export class Game {
     puddings: Matter.Body[],
     enemies: Matter.Body[],
     now: number,
+    extraAngle = 0,
   ): void {
     let gazeWorld: Matter.Vector | null = null;
 
@@ -1041,11 +1139,18 @@ export class Game {
       }
     }
 
-    this.drawCharacterEyes(ctx, self, gazeWorld, now, {
-      white: "#ffffff",
-      rim: "#57534e",
-      pupil: "#44403c",
-    });
+    this.drawCharacterEyes(
+      ctx,
+      self,
+      gazeWorld,
+      now,
+      {
+        white: "#ffffff",
+        rim: "#57534e",
+        pupil: "#44403c",
+      },
+      extraAngle,
+    );
   }
 
   private drawEnemyEyes(

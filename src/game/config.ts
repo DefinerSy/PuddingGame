@@ -77,3 +77,16 @@ export const ENEMY_EYE_PUDDING_RANGE = 420;
 export const EYE_BLINK_DURATION_MS = 110;
 export const EYE_BLINK_GAP_MIN_MS = 1800;
 export const EYE_BLINK_GAP_MAX_MS = 4800;
+
+/** 布丁 Q 弹：弹簧刚度（越大回弹越快）与阻尼 */
+export const PUDDING_JIGGLE_SPRING = 420;
+export const PUDDING_JIGGLE_DAMPING = 14;
+/** 单次碰撞注入速度上限（视觉弹簧） */
+export const PUDDING_JIGGLE_IMPULSE_CAP = 2.8;
+/** 相对法向速度低于此忽略，避免抖动 */
+export const PUDDING_JIGGLE_IMPACT_THRESHOLD = 0.22;
+/** 静止时呼吸摆动角速度（弧度/秒） */
+export const PUDDING_IDLE_WOBBLE_SPEED = 2.4;
+export const PUDDING_IDLE_WOBBLE_AMP = 0.028;
+/** 被抓取时绳子轻摆（弧度） */
+export const PUDDING_HELD_SWAY_AMP = 0.07;
