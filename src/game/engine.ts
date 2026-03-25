@@ -13,7 +13,6 @@ import {
   PUDDING_SLAM_STACK_DEPTH_MUL,
   BASE_UPGRADE_COST_BASE,
   BASE_UPGRADE_COST_PER_LEVEL,
-  BASE_UPGRADE_HOOK_LIFT,
   BASE_UPGRADE_MAX_LEVEL,
   BASE_UPGRADE_SKY_EXTRA,
   BASE_UPGRADE_SPAWN_PUSH,
@@ -390,37 +389,11 @@ export class Game {
     this.viewOffsetY = (HEIGHT - wh * this.viewScale) / 2;
   }
 
-  /** 扩展天空：地面与基地下移，吊机上移，布丁与敌人整体上移相同 delta */
+  /**
+   * 基地升级：只改镜头缩放/偏移与敌人生成距离，**不移动**任何物理体，
+   * 避免方块瞬间悬空再塌落。
+   */
   private applyBaseExpand(): void {
-    const delta = BASE_UPGRADE_SKY_EXTRA;
-    this.worldGroundY += delta;
-    this.hookY -= BASE_UPGRADE_HOOK_LIFT;
-
-    Body.setPosition(this.ground, {
-      x: this.ground.position.x,
-      y: this.ground.position.y + delta,
-    });
-    Body.setPosition(this.baseBody, {
-      x: this.baseBody.position.x,
-      y: this.baseBody.position.y + delta,
-    });
-    Body.setPosition(this.hook, { x: this.craneX, y: this.hookY });
-
-    /** 吊机上移 hookLift：方块应随地面下移 (delta)，再抵消挂钩上移，净位移 -(delta - hookLift) */
-    const hookLift = BASE_UPGRADE_HOOK_LIFT;
-    const dyBlocks = -(delta - hookLift);
-    const bodies = Composite.allBodies(this.world);
-    for (const b of bodies) {
-      if (
-        b.label === LABEL_GROUND ||
-        b.label === LABEL_HOOK ||
-        b.label === LABEL_BASE
-      ) {
-        continue;
-      }
-      Body.translate(b, { x: 0, y: dyBlocks });
-    }
-
     this.applyViewParams();
   }
 

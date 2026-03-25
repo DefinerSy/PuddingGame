@@ -81,10 +81,8 @@ export const PUDDING_SLAM_MAX_CENTER_Y_OVER_ENEMY = 22;
 export const BASE_UPGRADE_MAX_LEVEL = 4;
 export const BASE_UPGRADE_COST_BASE = 95;
 export const BASE_UPGRADE_COST_PER_LEVEL = 55;
-/** 每级世界向上扩展的像素（地面与天空整体上移等效：地面 y 下移） */
+/** 每级虚拟「天空」高度，仅用于镜头适配与绘制（物理地面位置不变） */
 export const BASE_UPGRADE_SKY_EXTRA = 110;
-/** 每级吊机挂钩上移 */
-export const BASE_UPGRADE_HOOK_LIFT = 48;
 /** 每级敌人生成距边界的额外距离 */
 export const BASE_UPGRADE_SPAWN_PUSH = 26;
 /** 每级在「适配高度」基础上的额外缩放（<1 拉远） */
