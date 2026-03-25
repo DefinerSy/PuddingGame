@@ -180,9 +180,13 @@ export class Game {
 
     this.baseBody = Bodies.rectangle(WIDTH / 2, GROUND_Y - 36, 72, 72, {
       isStatic: true,
-      isSensor: true,
       label: LABEL_BASE,
-      collisionFilter: { category: CAT_BASE, mask: CAT_ENEMY },
+      friction: 0.88,
+      frictionStatic: 1,
+      collisionFilter: {
+        category: CAT_BASE,
+        mask: CAT_ENEMY | CAT_BLOCK,
+      },
     });
 
     Composite.add(this.world, [this.ground, this.hook, this.baseBody]);
@@ -316,7 +320,7 @@ export class Game {
     Events.on(this.engine, "collisionStart", (ev: Matter.IEventCollision<Matter.Engine>) => {
       for (const pair of ev.pairs) {
         const { bodyA, bodyB } = pair;
-        this.handleGroundLanding(bodyA, bodyB);
+        this.handleSupportLanding(bodyA, bodyB);
         this.handleBulletHit(bodyA, bodyB);
       }
     });
@@ -344,21 +348,31 @@ export class Game {
     });
   }
 
-  private handleGroundLanding(a: Matter.Body, b: Matter.Body): void {
-    const g = a.label === LABEL_GROUND ? a : b.label === LABEL_GROUND ? b : null;
+  /** 布丁落在地面时需落在吊机安全区；落在核心上任意位置均可搭建 */
+  private handleSupportLanding(a: Matter.Body, b: Matter.Body): void {
     const p =
       a.label === LABEL_PUDDING ? a : b.label === LABEL_PUDDING ? b : null;
-    if (!g || !p) return;
+    if (!p) return;
+    const other = a === p ? b : a;
+    const onGround = other.label === LABEL_GROUND;
+    const onBase = other.label === LABEL_BASE;
+    if (!onGround && !onBase) return;
 
-    const minX = this.craneX - SAFE_HALF_WIDTH;
-    const maxX = this.craneX + SAFE_HALF_WIDTH;
-    if (p.position.x < minX || p.position.x > maxX) {
-      if (this.grabConstraint?.bodyB === p) {
-        this.releaseGrab();
-        this.renderShop();
+    if (onGround) {
+      const minX = this.craneX - SAFE_HALF_WIDTH;
+      const maxX = this.craneX + SAFE_HALF_WIDTH;
+      if (p.position.x < minX || p.position.x > maxX) {
+        this.detachAndRemovePudding(p);
       }
-      Composite.remove(this.world, p);
     }
+  }
+
+  private detachAndRemovePudding(p: Matter.Body): void {
+    if (this.grabConstraint?.bodyB === p) {
+      this.releaseGrab();
+      this.renderShop();
+    }
+    Composite.remove(this.world, p);
   }
 
   private handleBulletHit(a: Matter.Body, b: Matter.Body): void {
@@ -421,16 +435,8 @@ export class Game {
 
     data.hp -= ENEMY_DAMAGE_TO_PUDDING;
     if (data.hp <= 0) {
-      this.destroyPudding(pud);
+      this.detachAndRemovePudding(pud);
     }
-  }
-
-  private destroyPudding(p: Matter.Body): void {
-    if (this.grabConstraint?.bodyB === p) {
-      this.releaseGrab();
-      this.renderShop();
-    }
-    Composite.remove(this.world, p);
   }
 
   private onBeforeUpdate(): void {
@@ -727,7 +733,7 @@ export class Game {
       density: kind === "defender" ? 0.008 : 0.004,
       collisionFilter: {
         category: CAT_BLOCK,
-        mask: CAT_GROUND | CAT_ENEMY | CAT_BLOCK,
+        mask: CAT_GROUND | CAT_ENEMY | CAT_BLOCK | CAT_BASE,
       },
     });
 
