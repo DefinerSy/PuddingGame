@@ -2,7 +2,10 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>布丁塔防 · Pudding Stack</title>
   </head>
   <body>
@@ -20,11 +23,38 @@
           <button type="button" id="btn-refresh">刷新陈列</button>
           <span id="refresh-cost"></span>
         </div>
-        <p class="hint">
+        <p class="hint hint-desktop">
           A/D 或 ←/→ 移动吊机 · 空格抓取/释放 · 仅绿色区域可着地，红区落地会销毁
         </p>
+        <p class="hint hint-touch">
+          拖动画布左右移动吊机，或使用下方方向键 · 点「抓取」拾取/放下 ·
+          绿区可着地，红区落地会销毁
+        </p>
       </header>
-      <canvas id="game" width="1200" height="640"></canvas>
+      <div class="game-wrap">
+        <canvas id="game" width="1200" height="640"></canvas>
+      </div>
+      <div class="mobile-controls" aria-label="触屏操作">
+        <button
+          type="button"
+          id="btn-left"
+          class="touch-btn"
+          aria-label="吊机向左"
+        >
+          ◀
+        </button>
+        <button type="button" id="btn-grab" class="touch-btn touch-btn-grab">
+          抓取
+        </button>
+        <button
+          type="button"
+          id="btn-right"
+          class="touch-btn"
+          aria-label="吊机向右"
+        >
+          ▶
+        </button>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

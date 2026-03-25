@@ -63,6 +63,7 @@ function kindLabel(k: BlockKind): string {
 }
 
 export class Game {
+  private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private engine: Matter.Engine;
   private runner: Matter.Runner;
@@ -70,6 +71,11 @@ export class Game {
 
   private craneX = WIDTH / 2;
   private keys = new Set<string>();
+  private touchLeftHeld = false;
+  private touchRightHeld = false;
+  private dragPointerId: number | null = null;
+  private dragStartGameX = 0;
+  private dragStartCraneX = 0;
   private grabConstraint: Matter.Constraint | null = null;
   private heldBody: Matter.Body | null = null;
 
@@ -92,12 +98,16 @@ export class Game {
   private rollCostEl = document.getElementById("roll-cost")!;
   private refreshCostEl = document.getElementById("refresh-cost")!;
   private slotsEl = document.getElementById("slots")!;
+  private btnLeft = document.getElementById("btn-left") as HTMLButtonElement | null;
+  private btnRight = document.getElementById("btn-right") as HTMLButtonElement | null;
+  private btnGrab = document.getElementById("btn-grab") as HTMLButtonElement | null;
 
   private ground!: Matter.Body;
   private hook!: Matter.Body;
   private baseBody!: Matter.Body;
 
   constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2d context");
     this.ctx = ctx;
@@ -164,6 +174,97 @@ export class Game {
     });
     window.addEventListener("keyup", (e) => {
       this.keys.delete(e.code);
+    });
+
+    this.bindCanvasPointer();
+    this.bindTouchButtons();
+  }
+
+  private clientToGameX(clientX: number): number {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    return (clientX - rect.left) * scaleX;
+  }
+
+  private bindCanvasPointer(): void {
+    const onDown = (e: PointerEvent) => {
+      if (this.gameOver) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (this.dragPointerId !== null) return;
+      e.preventDefault();
+      this.dragPointerId = e.pointerId;
+      this.dragStartGameX = this.clientToGameX(e.clientX);
+      this.dragStartCraneX = this.craneX;
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== this.dragPointerId) return;
+      e.preventDefault();
+      const gx = this.clientToGameX(e.clientX);
+      const next = this.dragStartCraneX + (gx - this.dragStartGameX);
+      this.craneX = Math.min(
+        CRANE_X_MAX,
+        Math.max(CRANE_X_MIN, next),
+      );
+      Body.setPosition(this.hook, { x: this.craneX, y: CRANE_HOOK_Y });
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== this.dragPointerId) return;
+      this.dragPointerId = null;
+      try {
+        this.canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    this.canvas.addEventListener("pointerdown", onDown, { passive: false });
+    this.canvas.addEventListener("pointermove", onMove, { passive: false });
+    this.canvas.addEventListener("pointerup", onUp);
+    this.canvas.addEventListener("pointercancel", onUp);
+  }
+
+  private bindTouchButtons(): void {
+    const holdLeft = (down: boolean) => {
+      this.touchLeftHeld = down;
+    };
+    const holdRight = (down: boolean) => {
+      this.touchRightHeld = down;
+    };
+
+    const bindHold = (
+      el: HTMLButtonElement | null,
+      setHeld: (v: boolean) => void,
+    ) => {
+      if (!el) return;
+      el.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        setHeld(true);
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+      });
+      el.addEventListener("pointerup", () => setHeld(false));
+      el.addEventListener("pointercancel", () => setHeld(false));
+      el.addEventListener("lostpointercapture", () => setHeld(false));
+    };
+
+    bindHold(this.btnLeft, holdLeft);
+    bindHold(this.btnRight, holdRight);
+
+    this.btnGrab?.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (this.gameOver) return;
+      this.toggleGrab();
+      this.renderShop();
     });
   }
 
@@ -260,6 +361,12 @@ export class Game {
       this.keys.has("KeyD") ||
       this.keys.has("ArrowRight")
     ) {
+      dx += CRANE_MOVE_SPEED;
+    }
+    if (this.touchLeftHeld) {
+      dx -= CRANE_MOVE_SPEED;
+    }
+    if (this.touchRightHeld) {
       dx += CRANE_MOVE_SPEED;
     }
     this.craneX = Math.min(

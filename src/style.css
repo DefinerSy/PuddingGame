@@ -2,11 +2,16 @@
   box-sizing: border-box;
 }
 
+html {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   font-family: system-ui, "Segoe UI", sans-serif;
   background: #1a1d24;
   color: #e8eaef;
+  overscroll-behavior-y: none;
 }
 
 #app {
@@ -98,11 +103,72 @@ button:disabled {
   color: #8b93a5;
 }
 
+.hint-touch {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  .hint-touch {
+    display: block;
+  }
+
+  .hint-desktop {
+    display: none;
+  }
+}
+
+.game-wrap {
+  width: min(1200px, 100%);
+  touch-action: none;
+}
+
 #game {
   display: block;
-  max-width: 100%;
+  width: 100%;
   height: auto;
+  vertical-align: top;
   border-radius: 10px;
   border: 2px solid #3d4454;
   background: #0f1116;
+  touch-action: none;
+}
+
+.mobile-controls {
+  display: none;
+  width: min(1200px, 100%);
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  padding: 8px 0 16px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  .mobile-controls {
+    display: flex;
+  }
+}
+
+.touch-btn {
+  flex: 1;
+  max-width: 160px;
+  min-height: 52px;
+  font-size: 20px;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 1px solid #3d4454;
+  background: #2a3142;
+  color: #e8eaef;
+  touch-action: manipulation;
+}
+
+.touch-btn:active:not(:disabled) {
+  background: #3d4a63;
+}
+
+.touch-btn-grab {
+  flex: 1.2;
+  max-width: 200px;
+  font-size: 16px;
 }
