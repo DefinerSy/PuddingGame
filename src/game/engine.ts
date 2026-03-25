@@ -23,6 +23,8 @@ import {
   SHOOT_RANGE_BASE,
   SHOOT_RANGE_PER_HEIGHT,
   PASSIVE_INCOME_PER_MINUTE,
+  PUDDING_EYE_ENEMY_RANGE,
+  PUDDING_EYE_NEIGHBOR_RANGE,
   START_MONEY,
   TAKE_COST,
   WAVE_INTERVAL_MS,
@@ -51,6 +53,13 @@ function randomKind(): BlockKind {
   if (r < 0.35) return "shooter";
   if (r < 0.65) return "defender";
   return "producer";
+}
+
+function clampMag(v: Matter.Vector, maxLen: number): Matter.Vector {
+  const m = Matter.Vector.magnitude(v);
+  if (m <= maxLen || m < 1e-6) return v;
+  const s = maxLen / m;
+  return { x: v.x * s, y: v.y * s };
 }
 
 function kindLabel(k: BlockKind): string {
@@ -779,6 +788,8 @@ export class Game {
     ctx.setLineDash([]);
 
     const bodies = Composite.allBodies(this.world);
+    const puddingBodies = bodies.filter((b) => b.label === LABEL_PUDDING);
+    const enemyBodies = bodies.filter((b) => b.label === LABEL_ENEMY);
     for (const body of bodies) {
       if (body.label === LABEL_HOOK) {
         ctx.fillStyle = "#a78bfa";
@@ -823,6 +834,7 @@ export class Game {
           ctx.fillStyle = t > 0.35 ? "#22c55e" : "#ef4444";
           ctx.fillRect(left, top - 9, barW * t, 5);
         }
+        this.drawPuddingEyes(ctx, body, puddingBodies, enemyBodies);
         continue;
       }
       if (body.label === LABEL_ENEMY) {
@@ -878,6 +890,21 @@ export class Game {
     const x = -w / 2;
     const y = -h / 2;
     const r = 6;
+    this.roundRectPath(ctx, x, y, w, h, r);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private roundRectPath(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number,
+  ): void {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
@@ -889,9 +916,94 @@ export class Game {
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.stroke();
+  }
+
+  private drawPuddingEyes(
+    ctx: CanvasRenderingContext2D,
+    self: Matter.Body,
+    puddings: Matter.Body[],
+    enemies: Matter.Body[],
+  ): void {
+    const w = self.bounds.max.x - self.bounds.min.x;
+    const h = self.bounds.max.y - self.bounds.min.y;
+    const eyeR = Math.max(4.5, Math.min(8, w * 0.13));
+    const pupilR = eyeR * 0.42;
+    const maxPupilShift = eyeR - pupilR - 0.8;
+    const spread = w * 0.22;
+    const yOff = -h * 0.1;
+
+    let gazeWorld: Matter.Vector | null = null;
+
+    let bestEnemy: Matter.Body | null = null;
+    let bestEnemyD = PUDDING_EYE_ENEMY_RANGE + 1;
+    for (const e of enemies) {
+      const d = Matter.Vector.magnitude(
+        Matter.Vector.sub(e.position, self.position),
+      );
+      if (d < bestEnemyD && d <= PUDDING_EYE_ENEMY_RANGE) {
+        bestEnemyD = d;
+        bestEnemy = e;
+      }
+    }
+    if (bestEnemy) {
+      gazeWorld = bestEnemy.position;
+    } else {
+      let bestNeighbor: Matter.Body | null = null;
+      let bestNeighborD = PUDDING_EYE_NEIGHBOR_RANGE + 1;
+      for (const p of puddings) {
+        if (p.id === self.id) continue;
+        const d = Matter.Vector.magnitude(
+          Matter.Vector.sub(p.position, self.position),
+        );
+        if (d < bestNeighborD && d <= PUDDING_EYE_NEIGHBOR_RANGE) {
+          bestNeighborD = d;
+          bestNeighbor = p;
+        }
+      }
+      if (bestNeighbor) {
+        gazeWorld = bestNeighbor.position;
+      }
+    }
+
+    ctx.save();
+    ctx.translate(self.position.x, self.position.y);
+    ctx.rotate(self.angle);
+
+    const drawOneEye = (lx: number, ly: number) => {
+      let px = lx;
+      let py = ly;
+      if (gazeWorld) {
+        const cos = Math.cos(self.angle);
+        const sin = Math.sin(self.angle);
+        const eyeWx = self.position.x + lx * cos - ly * sin;
+        const eyeWy = self.position.y + lx * sin + ly * cos;
+        const toGaze = Matter.Vector.sub(gazeWorld, {
+          x: eyeWx,
+          y: eyeWy,
+        });
+        const shifted = clampMag(toGaze, maxPupilShift);
+        const localOff = Matter.Vector.rotate(shifted, -self.angle);
+        px = lx + localOff.x;
+        py = ly + localOff.y;
+      }
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.beginPath();
+      ctx.arc(lx, ly, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#0f172a";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(px, py, pupilR, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    drawOneEye(-spread, yOff);
+    drawOneEye(spread, yOff);
+
     ctx.restore();
   }
 }

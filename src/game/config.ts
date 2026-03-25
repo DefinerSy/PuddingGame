@@ -40,3 +40,8 @@ export const BASE_MAX_HP = 100;
 
 export const WAVE_INTERVAL_MS = 14000;
 export const ENEMIES_PER_SIDE_BASE = 1;
+
+/** 布丁眼珠看向敌人的最大距离（略大于常见射程，便于抬头发现敌人） */
+export const PUDDING_EYE_ENEMY_RANGE = 380;
+/** 与邻居布丁「对视」的搜索半径 */
+export const PUDDING_EYE_NEIGHBOR_RANGE = 145;
