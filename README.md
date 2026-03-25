@@ -31,3 +31,15 @@ npm run preview
 ## 数值
 
 可在 `src/game/config.ts` 中调整费用、射速、射程高度加成、波次间隔等。
+
+## GitHub Pages
+
+1. 仓库 **Settings → Pages**：**Build and deployment** 的 **Source** 选 **GitHub Actions**。
+2. 将包含本工作流的提交合并进 **`main`** 分支（或手动运行 **Actions → Deploy to GitHub Pages → Run workflow**）。
+3. 部署完成后，游戏地址一般为：`https://<你的用户名>.github.io/PuddingGame/`（仓库名区分大小写时请与 GitHub 上实际仓库名一致）。
+
+本地若要模拟线上路径，可执行：
+
+```bash
+VITE_BASE_PATH=/PuddingGame/ npm run build && npm run preview
+```
