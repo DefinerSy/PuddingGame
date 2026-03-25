@@ -575,6 +575,11 @@ body.game-over-shake {
   backdrop-filter: blur(4px);
 }
 
+/* hidden 属性默认是 display:none，但上面 flex 会覆盖它，导致开局仍挡住画布 */
+.chest-pick-modal[hidden] {
+  display: none;
+}
+
 .chest-pick-card {
   width: min(520px, 100%);
   max-height: min(90vh, 560px);
