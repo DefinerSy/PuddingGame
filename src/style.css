@@ -102,14 +102,23 @@ body {
 }
 
 .shop-panel {
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   padding: 14px 16px;
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 250, 245, 0.88));
   border: 3px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 6px 0 rgba(139, 90, 60, 0.12), 0 12px 28px rgba(92, 64, 51, 0.1);
-  gap: 14px;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .shop-panel {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+  }
 }
 
 .shop-actions {
@@ -118,10 +127,13 @@ body {
   align-items: center;
   gap: 6px;
   min-width: 88px;
+  align-self: center;
 }
 
-.shop-refresh {
-  justify-content: flex-start;
+@media (min-width: 640px) {
+  .shop-actions {
+    align-self: flex-start;
+  }
 }
 
 .cost-tag {
@@ -173,11 +185,6 @@ body {
   border: 3px solid #fff8;
 }
 
-.btn-refresh {
-  background: linear-gradient(180deg, #bae6fd, #38bdf8);
-  border: 3px solid #fff8;
-}
-
 .btn-take {
   width: 100%;
   margin-top: 4px;
@@ -199,19 +206,24 @@ body {
 
 .slots {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 8px;
   justify-content: center;
+  align-items: stretch;
   flex: 1;
   min-width: 0;
+  width: 100%;
 }
 
 .slot {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 12px 10px;
-  min-width: 118px;
+  padding: 10px 8px 8px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 140px;
   border-radius: 16px;
   background: linear-gradient(160deg, #fffefb, #fff5eb);
   border: 3px solid rgba(253, 230, 138, 0.65);
@@ -219,10 +231,12 @@ body {
 }
 
 .slot-type {
-  font-size: 0.88rem;
+  font-size: clamp(0.72rem, 2.8vw, 0.88rem);
   font-weight: 800;
   text-align: center;
   padding: 4px 0;
+  line-height: 1.2;
+  word-break: keep-all;
 }
 
 .slot-type.shooter {

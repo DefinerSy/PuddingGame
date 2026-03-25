@@ -21,7 +21,6 @@ import {
   GROUND_Y,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
-  REFRESH_COST,
   ROLL_COST,
   SAFE_HALF_WIDTH,
   SHOOT_INTERVAL_MS,
@@ -157,9 +156,7 @@ export class Game {
   private waveEl = document.getElementById("wave")!;
   private baseHpEl = document.getElementById("base-hp")!;
   private btnRoll = document.getElementById("btn-roll") as HTMLButtonElement;
-  private btnRefresh = document.getElementById("btn-refresh") as HTMLButtonElement;
   private rollCostEl = document.getElementById("roll-cost")!;
-  private refreshCostEl = document.getElementById("refresh-cost")!;
   private slotsEl = document.getElementById("slots")!;
   private btnLeft = document.getElementById("btn-left") as HTMLButtonElement | null;
   private btnRight = document.getElementById("btn-right") as HTMLButtonElement | null;
@@ -337,7 +334,6 @@ export class Game {
 
   private bindShop(): void {
     this.btnRoll.addEventListener("click", () => this.rollShop());
-    this.btnRefresh.addEventListener("click", () => this.refreshShop());
   }
 
   private bindCollisions(): void {
@@ -748,16 +744,6 @@ export class Game {
     this.renderShop();
   }
 
-  private refreshShop(): void {
-    if (this.gameOver) return;
-    if (!this.shopFilled) return;
-    if (this.money < REFRESH_COST) return;
-    this.money -= REFRESH_COST;
-    this.shopSlots = [randomKind(), randomKind(), randomKind()];
-    this.updateHud();
-    this.renderShop();
-  }
-
   private takeFromSlot(index: number): void {
     if (this.gameOver) return;
     if (!this.shopFilled || index < 0 || index >= this.shopSlots.length) {
@@ -838,10 +824,7 @@ export class Game {
       this.gameOver ? " 💔" : ""
     }`;
     this.rollCostEl.textContent = `-${ROLL_COST}`;
-    this.refreshCostEl.textContent = `-${REFRESH_COST}`;
     this.btnRoll.disabled = this.gameOver || this.money < ROLL_COST;
-    this.btnRefresh.disabled =
-      this.gameOver || !this.shopFilled || this.money < REFRESH_COST;
   }
 
   private renderShop(): void {

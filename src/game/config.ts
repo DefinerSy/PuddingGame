@@ -21,7 +21,6 @@ export const CRANE_MOVE_SPEED = 5;
  */
 export const ROLL_COST = 14;
 export const TAKE_COST = 7;
-export const REFRESH_COST = 4;
 export const START_MONEY = 45;
 /** 全局被动产费：与生产者无关，按真实时间每分钟增加的费用（整数结算） */
 export const PASSIVE_INCOME_PER_MINUTE = 28;
