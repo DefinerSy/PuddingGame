@@ -56,8 +56,11 @@ import {
   CHEST_BOX_H,
   CHEST_BOX_W,
   CHEST_CARRIER_WAVE_EVERY,
-  CHEST_HOOK_PICKUP_RADIUS,
+  CHEST_HOOK_OVERHEAD_HALF_WIDTH,
   CHEST_LIFETIME_MS,
+  CHEST_PICKUP_FEET_MAX_Y_OFFSET,
+  CHEST_PICKUP_FEET_MIN_Y_OFFSET,
+  CHEST_PICKUP_MAX_ABS_VY,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
   ROLL_COST_BASE,
@@ -742,26 +745,42 @@ export class Game {
     this.openChestPickModal();
   }
 
+  /**
+   * 吊钩水平对准地面上的宝箱时拾取（钩子在天上，不能用 3D 距离判拾取）
+   */
   private tryPickupChestWithHook(): void {
-    if (this.gameOver || this.isChestPickOpen() || this.grabConstraint) return;
-    const hookPos = this.hook.position;
-    const maxD = CHEST_HOOK_PICKUP_RADIUS;
+    if (this.gameOver || this.isChestPickOpen()) return;
+    const hookX = this.hook.position.x;
+    const gy = this.worldGroundY;
     const bodies = Composite.allBodies(this.world);
-    let best: Matter.Body | null = null;
-    let bestD = maxD + 1;
     for (const body of bodies) {
       if (body.label !== LABEL_CHEST) continue;
-      const d = Matter.Vector.magnitude(
-        Matter.Vector.sub(body.position, hookPos),
-      );
-      if (d <= maxD && d < bestD) {
-        bestD = d;
-        best = body;
+      if (Math.abs(body.position.x - hookX) > CHEST_HOOK_OVERHEAD_HALF_WIDTH) {
+        continue;
       }
+      const feetY = body.bounds.max.y;
+      if (
+        feetY < gy + CHEST_PICKUP_FEET_MIN_Y_OFFSET ||
+        feetY > gy + CHEST_PICKUP_FEET_MAX_Y_OFFSET
+      ) {
+        continue;
+      }
+      if (Math.abs(body.velocity.y) > CHEST_PICKUP_MAX_ABS_VY) {
+        continue;
+      }
+      this.collectChest(body);
+      return;
     }
-    if (best) {
-      this.collectChest(best);
-    }
+  }
+
+  /** 用方块碰到宝箱也可开箱（吊钩够不着地面时） */
+  private handlePuddingChestContact(a: Matter.Body, b: Matter.Body): void {
+    const pud =
+      a.label === LABEL_PUDDING ? a : b.label === LABEL_PUDDING ? b : null;
+    const chest =
+      a.label === LABEL_CHEST ? a : b.label === LABEL_CHEST ? b : null;
+    if (!pud || !chest || this.gameOver || this.isChestPickOpen()) return;
+    this.collectChest(chest);
   }
 
   private bindCollisions(): void {
@@ -772,6 +791,7 @@ export class Game {
         this.handleChestGroundLanding(bodyA, bodyB);
         this.handleBulletHit(bodyA, bodyB);
         this.handlePuddingSlamEnemy(bodyA, bodyB);
+        this.handlePuddingChestContact(bodyA, bodyB);
         this.handleHookChestContact(bodyA, bodyB);
         this.applyPuddingJiggleFromPair(pair);
         this.queuePerfectMerge(bodyA, bodyB);

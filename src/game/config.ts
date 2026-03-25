@@ -147,8 +147,15 @@ export const CHEST_CARRIER_WAVE_EVERY = 5;
 export const CHEST_BOX_W = 34;
 export const CHEST_BOX_H = 28;
 export const CHEST_LIFETIME_MS = 45000;
-/** 吊钩中心距宝箱中心 ≤ 此值即可拾取（静态钩每帧 setPosition 时碰撞事件不可靠） */
-export const CHEST_HOOK_PICKUP_RADIUS = 52;
+/**
+ * 吊钩在宝箱正上方拾取：钩子在地面之上，需水平对齐 + 宝箱已着地（非 3D 距离）
+ */
+export const CHEST_HOOK_OVERHEAD_HALF_WIDTH = 58;
+/** 宝箱底边 y 相对草地顶 worldGroundY 的允许范围（着地即可吸） */
+export const CHEST_PICKUP_FEET_MIN_Y_OFFSET = -26;
+export const CHEST_PICKUP_FEET_MAX_Y_OFFSET = 14;
+/** 着地拾取时竖直速度需较小（避免空中误吸） */
+export const CHEST_PICKUP_MAX_ABS_VY = 1.35;
 
 /** 宝箱加成数值（可叠乘：同类再选一层再乘一次） */
 export const BONUS_SHOOTER_INTERVAL_MUL = 0.5;
