@@ -94,9 +94,13 @@ export const PUDDING_IDLE_WOBBLE_AMP = 0.028;
 export const PUDDING_HELD_SWAY_AMP = 0.07;
 
 /** 《都市摩天楼》式完美叠放：同类上下对齐合并为更高一体块 */
-export const MERGE_ALIGN_MAX_PX = 14;
-export const MERGE_MAX_ANGLE_RAD = 0.14;
-export const MERGE_VERTICAL_TOUCH_PX = 18;
+export const MERGE_ALIGN_MAX_PX = 22;
+export const MERGE_MAX_ANGLE_RAD = 0.22;
+/** 上块底边与下块顶边的穿透/间隙（像素，y 向下为正）；略负允许微小缝 */
+export const MERGE_FACE_GAP_MIN = -10;
+export const MERGE_FACE_GAP_MAX = 36;
+/** 水平投影重叠至少占较窄块宽度的比例 */
+export const MERGE_MIN_HORIZONTAL_OVERLAP_FRAC = 0.42;
 export const MERGE_POWER_BASE = 2.5;
 /** 合并层数上限（由多个单体堆成） */
 export const MERGE_MAX_STACK_DEPTH = 12;

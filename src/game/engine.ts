@@ -20,10 +20,12 @@ import {
   GROUND_THICK,
   GROUND_Y,
   MERGE_ALIGN_MAX_PX,
+  MERGE_FACE_GAP_MAX,
+  MERGE_FACE_GAP_MIN,
   MERGE_MAX_ANGLE_RAD,
   MERGE_MAX_STACK_DEPTH,
+  MERGE_MIN_HORIZONTAL_OVERLAP_FRAC,
   MERGE_POWER_BASE,
-  MERGE_VERTICAL_TOUCH_PX,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
   ROLL_COST_BASE,
@@ -537,11 +539,20 @@ export class Game {
     const angOk =
       Math.abs(top.angle) <= MERGE_MAX_ANGLE_RAD &&
       Math.abs(bottom.angle) <= MERGE_MAX_ANGLE_RAD;
-    const overlap = bottom.bounds.max.y - top.bounds.min.y;
+    /** 上块底边 y − 下块顶边 y：≈0 为贴合，略正为压入，负为分离 */
+    const faceGap = top.bounds.max.y - bottom.bounds.min.y;
     const vertOk =
-      overlap >= -4 && overlap <= MERGE_VERTICAL_TOUCH_PX;
+      faceGap >= MERGE_FACE_GAP_MIN && faceGap <= MERGE_FACE_GAP_MAX;
+    const tw = top.bounds.max.x - top.bounds.min.x;
+    const bw = bottom.bounds.max.x - bottom.bounds.min.x;
+    const minW = Math.min(tw, bw);
+    const hOverlap =
+      Math.min(top.bounds.max.x, bottom.bounds.max.x) -
+      Math.max(top.bounds.min.x, bottom.bounds.min.x);
+    const hOverlapOk =
+      minW > 0 && hOverlap >= minW * MERGE_MIN_HORIZONTAL_OVERLAP_FRAC;
 
-    if (!alignOk || !angOk || !vertOk) return;
+    if (!alignOk || !angOk || !vertOk || !hOverlapOk) return;
 
     const dBottom = bottom.plugin.pudding as PuddingData;
     const dTop = top.plugin.pudding as PuddingData;
@@ -583,15 +594,24 @@ export class Game {
     if (!db || !dt || db.kind !== dt.kind) return;
 
     const alignOk =
-      Math.abs(top.position.x - bottom.position.x) <= MERGE_ALIGN_MAX_PX * 1.35;
+      Math.abs(top.position.x - bottom.position.x) <= MERGE_ALIGN_MAX_PX * 1.4;
     const angOk =
-      Math.abs(top.angle) <= MERGE_MAX_ANGLE_RAD * 1.35 &&
-      Math.abs(bottom.angle) <= MERGE_MAX_ANGLE_RAD * 1.35;
-    const overlap = bottom.bounds.max.y - top.bounds.min.y;
+      Math.abs(top.angle) <= MERGE_MAX_ANGLE_RAD * 1.4 &&
+      Math.abs(bottom.angle) <= MERGE_MAX_ANGLE_RAD * 1.4;
+    const faceGap = top.bounds.max.y - bottom.bounds.min.y;
     const vertOk =
-      overlap >= -8 && overlap <= MERGE_VERTICAL_TOUCH_PX * 1.5;
-    if (top.bounds.min.y > bottom.bounds.max.y + 14) return;
-    if (!alignOk || !angOk || !vertOk) return;
+      faceGap >= MERGE_FACE_GAP_MIN - 4 &&
+      faceGap <= MERGE_FACE_GAP_MAX + 12;
+    if (top.bounds.min.y > bottom.bounds.max.y + 20) return;
+    const topW = top.bounds.max.x - top.bounds.min.x;
+    const botW = bottom.bounds.max.x - bottom.bounds.min.x;
+    const minW = Math.min(topW, botW);
+    const hOverlap =
+      Math.min(top.bounds.max.x, bottom.bounds.max.x) -
+      Math.max(top.bounds.min.x, bottom.bounds.min.x);
+    const hOverlapOk =
+      minW > 0 && hOverlap >= minW * (MERGE_MIN_HORIZONTAL_OVERLAP_FRAC * 0.92);
+    if (!alignOk || !angOk || !vertOk || !hOverlapOk) return;
 
     const sb = db.stackDepth ?? 1;
     const st = dt.stackDepth ?? 1;
@@ -602,9 +622,7 @@ export class Game {
     const powerMult = MERGE_POWER_BASE * (mb + mt) * 0.5;
     const stackDepth = sb + st;
 
-    const bw = bottom.bounds.max.x - bottom.bounds.min.x;
-    const tw = top.bounds.max.x - top.bounds.min.x;
-    const mergedW = Math.max(bw, tw);
+    const mergedW = Math.max(botW, topW);
     const minY = top.bounds.min.y;
     const maxY = bottom.bounds.max.y;
     const mergedH = maxY - minY;
