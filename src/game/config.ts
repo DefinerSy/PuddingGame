@@ -15,15 +15,19 @@ export const CRANE_HOOK_Y = 100;
 export const CRANE_MOVE_SPEED = 5;
 
 /**
- * 经济（偏紧：无生产者时首次 Roll+取出约需 35～50s 被动积累）
- * - Roll(18)+取(9)=27；开局 30 先 Roll 后需再攒 9 费
- * - 被动 14/分 → 约 39s 凑满 9
+ * 经济：开局宽松（低基础费 + 略多起步钱 + 首局 Roll 必含一格射手）；
+ * 随波次提高 Roll/取出价，避免后期费用四位数闲置。
  */
-export const ROLL_COST = 18;
-export const TAKE_COST = 9;
-export const START_MONEY = 30;
+export const ROLL_COST_BASE = 16;
+export const TAKE_COST_BASE = 8;
+/** 每完成一波（wave 增加 1）后，Roll 与取出各加的整数费 */
+export const ROLL_COST_PER_WAVE = 2;
+export const TAKE_COST_PER_WAVE = 1;
+export const ROLL_COST_MAX = 48;
+export const TAKE_COST_MAX = 22;
+export const START_MONEY = 38;
 /** 全局被动产费：与生产者无关，按真实时间每分钟增加的费用（整数结算） */
-export const PASSIVE_INCOME_PER_MINUTE = 14;
+export const PASSIVE_INCOME_PER_MINUTE = 12;
 
 /**
  * 射手（推演：地面射手约 3 发打死第 1 波敌人；叠高后射程覆盖侧翼）
@@ -35,10 +39,10 @@ export const SHOOT_RANGE_PER_HEIGHT = 1.12;
 export const BULLET_DAMAGE = 13;
 
 /**
- * 生产者：约 4s +5，折合约 75/分，仍明显高于被动但不再滚雪球过快
+ * 生产者：略慢略少，配合波次涨价，后期不会无限囤费
  */
-export const PRODUCER_INTERVAL_MS = 4000;
-export const PRODUCER_AMOUNT = 5;
+export const PRODUCER_INTERVAL_MS = 4500;
+export const PRODUCER_AMOUNT = 4;
 
 /** 布丁最大生命（createPuddingBody 内使用） */
 export const SHOOTER_HP = 68;

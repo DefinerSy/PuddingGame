@@ -21,7 +21,9 @@ import {
   GROUND_Y,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
-  ROLL_COST,
+  ROLL_COST_BASE,
+  ROLL_COST_MAX,
+  ROLL_COST_PER_WAVE,
   SAFE_HALF_WIDTH,
   SHOOT_INTERVAL_MS,
   SHOOT_RANGE_BASE,
@@ -40,7 +42,9 @@ import {
   PUDDING_JIGGLE_SPRING,
   PUDDING_EYE_NEIGHBOR_RANGE,
   START_MONEY,
-  TAKE_COST,
+  TAKE_COST_BASE,
+  TAKE_COST_MAX,
+  TAKE_COST_PER_WAVE,
   WAVE_INTERVAL_MS,
   WAVE_START_DELAY_MS,
   WIDTH,
@@ -167,6 +171,8 @@ export class Game {
 
   private shopSlots: BlockKind[] = [];
   private shopFilled = false;
+  /** 第一局老虎机必含至少一格射手，避免开局无输出崩盘 */
+  private firstRollDone = false;
 
   private enemyHitBaseCooldown = new Map<number, number>();
   private enemyHitPuddingCooldown = new Map<string, number>();
@@ -799,11 +805,38 @@ export class Game {
     this.heldBody = null;
   }
 
+  private getRollCost(): number {
+    return Math.min(
+      ROLL_COST_MAX,
+      ROLL_COST_BASE + this.wave * ROLL_COST_PER_WAVE,
+    );
+  }
+
+  private getTakeCost(): number {
+    return Math.min(
+      TAKE_COST_MAX,
+      TAKE_COST_BASE + this.wave * TAKE_COST_PER_WAVE,
+    );
+  }
+
   private rollShop(): void {
     if (this.gameOver) return;
-    if (this.money < ROLL_COST) return;
-    this.money -= ROLL_COST;
-    this.shopSlots = [randomKind(), randomKind(), randomKind()];
+    const cost = this.getRollCost();
+    if (this.money < cost) return;
+    this.money -= cost;
+    let a = randomKind();
+    let b = randomKind();
+    let c = randomKind();
+    if (!this.firstRollDone) {
+      this.firstRollDone = true;
+      if (a !== "shooter" && b !== "shooter" && c !== "shooter") {
+        const slot = Math.floor(Math.random() * 3);
+        if (slot === 0) a = "shooter";
+        else if (slot === 1) b = "shooter";
+        else c = "shooter";
+      }
+    }
+    this.shopSlots = [a, b, c];
     this.shopFilled = true;
     this.updateHud();
   }
@@ -813,10 +846,11 @@ export class Game {
     if (!this.shopFilled || index < 0 || index >= this.shopSlots.length) {
       return;
     }
-    if (this.money < TAKE_COST) return;
+    const cost = this.getTakeCost();
+    if (this.money < cost) return;
     if (this.heldBody) return;
 
-    this.money -= TAKE_COST;
+    this.money -= cost;
     const kind = this.shopSlots[index]!;
     this.shopSlots.splice(index, 1);
     if (this.shopSlots.length === 0) {
@@ -956,8 +990,8 @@ export class Game {
     this.baseHpEl.textContent = `${Math.ceil(this.baseHp)}${
       this.gameOver ? " 💔" : ""
     }`;
-    this.rollCostEl.textContent = `-${ROLL_COST}`;
-    this.btnRoll.disabled = this.gameOver || this.money < ROLL_COST;
+    this.rollCostEl.textContent = `-${this.getRollCost()}`;
+    this.btnRoll.disabled = this.gameOver || this.money < this.getRollCost();
     /** 费用变化后须重建三格按钮，否则「取出」仍保持加费前的 disabled */
     if (this.shopFilled) {
       this.renderShop();
@@ -982,9 +1016,11 @@ export class Game {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-take";
-      btn.textContent = `取出 ${TAKE_COST} 🪙`;
+      btn.textContent = `取出 ${this.getTakeCost()} 🪙`;
       btn.disabled =
-        this.gameOver || this.money < TAKE_COST || !!this.grabConstraint;
+        this.gameOver ||
+        this.money < this.getTakeCost() ||
+        !!this.grabConstraint;
       btn.addEventListener("click", () => this.takeFromSlot(index));
       div.appendChild(title);
       div.appendChild(btn);
