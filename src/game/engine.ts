@@ -390,7 +390,6 @@ export class Game {
       e.preventDefault();
       if (this.gameOver) return;
       this.toggleGrab();
-      this.renderShop();
     });
   }
 
@@ -499,7 +498,7 @@ export class Game {
   private detachAndRemovePudding(p: Matter.Body): void {
     if (this.grabConstraint?.bodyB === p) {
       this.releaseGrab();
-      this.renderShop();
+      this.updateHud();
     }
     Composite.remove(this.world, p);
   }
@@ -756,7 +755,7 @@ export class Game {
     if (this.gameOver) return;
     if (this.grabConstraint) {
       this.releaseGrab();
-      this.renderShop();
+      this.updateHud();
       return;
     }
     const bodies = Composite.allBodies(this.world);
@@ -789,6 +788,7 @@ export class Game {
       ),
     });
     Composite.add(this.world, this.grabConstraint);
+    this.updateHud();
   }
 
   private releaseGrab(): void {
@@ -806,7 +806,6 @@ export class Game {
     this.shopSlots = [randomKind(), randomKind(), randomKind()];
     this.shopFilled = true;
     this.updateHud();
-    this.renderShop();
   }
 
   private takeFromSlot(index: number): void {
@@ -837,7 +836,6 @@ export class Game {
     Composite.add(this.world, this.grabConstraint);
 
     this.updateHud();
-    this.renderShop();
   }
 
   private createPuddingBody(kind: BlockKind, x: number, y: number): Matter.Body {
@@ -960,6 +958,10 @@ export class Game {
     }`;
     this.rollCostEl.textContent = `-${ROLL_COST}`;
     this.btnRoll.disabled = this.gameOver || this.money < ROLL_COST;
+    /** 费用变化后须重建三格按钮，否则「取出」仍保持加费前的 disabled */
+    if (this.shopFilled) {
+      this.renderShop();
+    }
   }
 
   private renderShop(): void {
