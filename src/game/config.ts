@@ -147,6 +147,8 @@ export const CHEST_CARRIER_WAVE_EVERY = 5;
 export const CHEST_BOX_W = 34;
 export const CHEST_BOX_H = 28;
 export const CHEST_LIFETIME_MS = 45000;
+/** 吊钩中心距宝箱中心 ≤ 此值即可拾取（静态钩每帧 setPosition 时碰撞事件不可靠） */
+export const CHEST_HOOK_PICKUP_RADIUS = 52;
 
 /** 宝箱加成数值（可叠乘：同类再选一层再乘一次） */
 export const BONUS_SHOOTER_INTERVAL_MUL = 0.5;

@@ -56,6 +56,7 @@ import {
   CHEST_BOX_H,
   CHEST_BOX_W,
   CHEST_CARRIER_WAVE_EVERY,
+  CHEST_HOOK_PICKUP_RADIUS,
   CHEST_LIFETIME_MS,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
@@ -731,8 +732,36 @@ export class Game {
     const chest =
       a.label === LABEL_CHEST ? a : b.label === LABEL_CHEST ? b : null;
     if (!hook || !chest || this.gameOver || this.isChestPickOpen()) return;
+    this.collectChest(chest);
+  }
+
+  /** 吊钩与宝箱重叠拾取；另见每帧距离检测（静态钩位移导致 collision 常不触发） */
+  private collectChest(chest: Matter.Body): void {
+    if (this.gameOver || this.isChestPickOpen()) return;
     Composite.remove(this.world, chest);
     this.openChestPickModal();
+  }
+
+  private tryPickupChestWithHook(): void {
+    if (this.gameOver || this.isChestPickOpen() || this.grabConstraint) return;
+    const hookPos = this.hook.position;
+    const maxD = CHEST_HOOK_PICKUP_RADIUS;
+    const bodies = Composite.allBodies(this.world);
+    let best: Matter.Body | null = null;
+    let bestD = maxD + 1;
+    for (const body of bodies) {
+      if (body.label !== LABEL_CHEST) continue;
+      const d = Matter.Vector.magnitude(
+        Matter.Vector.sub(body.position, hookPos),
+      );
+      if (d <= maxD && d < bestD) {
+        bestD = d;
+        best = body;
+      }
+    }
+    if (best) {
+      this.collectChest(best);
+    }
   }
 
   private bindCollisions(): void {
@@ -1293,6 +1322,7 @@ export class Game {
       Math.max(CRANE_X_MIN, this.craneX + dx),
     );
     Body.setPosition(this.hook, { x: this.craneX, y: this.hookY });
+    this.tryPickupChestWithHook();
 
     const dt = 1000 / 60;
     this.tickPassiveIncome(dt);
