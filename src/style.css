@@ -80,6 +80,30 @@ body {
   animation: stat-pulse-money 0.45s ease;
 }
 
+.stat-pill.fx-base-hit {
+  animation: stat-pulse-base 0.38s ease;
+}
+
+@keyframes stat-pulse-base {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.06), 0 6px 16px rgba(92, 64, 51, 0.12);
+  }
+  35% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.55);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.06), 0 6px 16px rgba(92, 64, 51, 0.12);
+  }
+}
+
+.fx-float.fx-base-dmg {
+  color: #dc2626;
+  font-size: 1.05rem;
+}
+
 @keyframes stat-pulse-money {
   0% {
     transform: scale(1);

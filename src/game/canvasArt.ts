@@ -105,6 +105,7 @@ export function drawGroundCasual(
 export function drawBaseCasual(
   ctx: CanvasRenderingContext2D,
   body: Matter.Body,
+  now: number,
 ): void {
   const w = body.bounds.max.x - body.bounds.min.x;
   const h = body.bounds.max.y - body.bounds.min.y;
@@ -116,15 +117,27 @@ export function drawBaseCasual(
   const r = 14;
   roundRectPath(ctx, x, y, w, h, r);
 
+  const flashUntil = body.plugin.hitFlashUntil as number | undefined;
+  const flash = flashUntil && now < flashUntil ? (flashUntil - now) / 320 : 0;
+
   const g = ctx.createRadialGradient(0, y + h * 0.35, 4, 0, 0, Math.max(w, h));
-  g.addColorStop(0, "#c4d4ff");
-  g.addColorStop(0.5, "#8fb4ff");
-  g.addColorStop(1, "#6b8ef0");
+  if (flash > 0) {
+    g.addColorStop(0, "#fecaca");
+    g.addColorStop(0.45, "#f87171");
+    g.addColorStop(1, "#6b8ef0");
+  } else {
+    g.addColorStop(0, "#c4d4ff");
+    g.addColorStop(0.5, "#8fb4ff");
+    g.addColorStop(1, "#6b8ef0");
+  }
   ctx.fillStyle = g;
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(67, 97, 180, 0.75)";
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle =
+    flash > 0
+      ? `rgba(220, 38, 38, ${0.5 + flash * 0.45})`
+      : "rgba(67, 97, 180, 0.75)";
+  ctx.lineWidth = 2.5 + flash * 2;
   ctx.stroke();
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.5)";

@@ -569,6 +569,14 @@ export class Game {
     if (!col?.collided) return;
     const a = pair.bodyA;
     const b = pair.bodyB;
+    if (
+      a.label === LABEL_GROUND ||
+      b.label === LABEL_GROUND ||
+      a.label === LABEL_BASE ||
+      b.label === LABEL_BASE
+    ) {
+      return;
+    }
     const n = col.normal;
     const rel = Matter.Vector.sub(b.velocity, a.velocity);
     const approach = Math.abs(Matter.Vector.dot(rel, n));
@@ -674,6 +682,36 @@ export class Game {
         y: Math.min(0, body.velocity.y),
       });
       Body.setAngularVelocity(body, body.angularVelocity * 0.94);
+    }
+    this.settlePuddingsOnGround();
+  }
+
+  /** 落地且几乎静止时阻尼角速度，避免方块被微碰撞持续翘起 */
+  private settlePuddingsOnGround(): void {
+    if (this.gameOver) return;
+    const gt = this.worldGroundY;
+    const bodies = Composite.allBodies(this.world);
+    for (const body of bodies) {
+      if (body.label !== LABEL_PUDDING) continue;
+      if (this.grabConstraint?.bodyB === body) continue;
+      const verts = body.vertices;
+      if (!verts.length) continue;
+      let maxY = verts[0]!.y;
+      for (let i = 1; i < verts.length; i++) {
+        const y = verts[i]!.y;
+        if (y > maxY) maxY = y;
+      }
+      if (maxY < gt - 3) continue;
+      const spd = Matter.Vector.magnitude(body.velocity);
+      if (spd > 0.22) continue;
+      const av = body.angularVelocity;
+      Body.setAngularVelocity(body, av * 0.65);
+      if (Math.abs(body.angularVelocity) < 0.02) {
+        Body.setAngularVelocity(body, 0);
+        if (Math.abs(body.angle) < 0.05) {
+          Body.setAngle(body, 0);
+        }
+      }
     }
   }
 
@@ -808,8 +846,8 @@ export class Game {
     const merged = Bodies.rectangle(centerX, centerY, mergedW, mergedH, {
       chamfer: { radius: 6 },
       label: LABEL_PUDDING,
-      friction: 0.75,
-      frictionStatic: 0.9,
+      friction: 0.88,
+      frictionStatic: 1,
       density: kind === "defender" ? 0.008 : 0.004,
       angle: 0,
       collisionFilter: {
@@ -876,7 +914,32 @@ export class Game {
     if (now - last < 500) return;
     this.enemyHitBaseCooldown.set(id, now);
     const ed = enemy.plugin.puddingEnemy as EnemyData | undefined;
-    this.baseHp -= ed?.damageToBase ?? ENEMY_DAMAGE;
+    this.baseBody.plugin.hitFlashUntil = now + 320;
+    const dmg = ed?.damageToBase ?? ENEMY_DAMAGE;
+    this.baseHp -= dmg;
+    const basePill = document.querySelector(".stat-pill.stat-base");
+    if (basePill) {
+      pulseElement(basePill as HTMLElement, "fx-base-hit", 380);
+    }
+    if (this.statCoinsPill) {
+      const r = this.baseBody.bounds;
+      const cx = (r.min.x + r.max.x) / 2;
+      const cy = r.min.y - 8;
+      const scr = gameToScreen(this.canvas, cx, cy, {
+        viewScale: this.viewScale,
+        viewOffsetX: this.viewOffsetX,
+        viewOffsetY: this.viewOffsetY,
+        worldHeight: this.getWorldHeight(),
+      });
+      spawnFloatText(
+        this.fxOverlay,
+        scr.x,
+        scr.y,
+        `-${dmg}`,
+        "fx-base-dmg",
+        700,
+      );
+    }
     if (this.baseHp <= 0) {
       this.baseHp = 0;
       this.gameOver = true;
@@ -1257,8 +1320,8 @@ export class Game {
     const body = Bodies.rectangle(x, y, w, h, {
       chamfer: { radius: 6 },
       label: LABEL_PUDDING,
-      friction: 0.75,
-      frictionStatic: 0.9,
+      friction: 0.88,
+      frictionStatic: 1,
       density: kind === "defender" ? 0.008 : 0.004,
       collisionFilter: {
         category: CAT_BLOCK,
@@ -1460,7 +1523,7 @@ export class Game {
           continue;
         }
         if (body.label === LABEL_BASE) {
-          drawBaseCasual(ctx, body);
+          drawBaseCasual(ctx, body, now);
           continue;
         }
         if (body.label === LABEL_PUDDING) {
