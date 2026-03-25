@@ -491,6 +491,12 @@ export class Game {
         data.stackDepth = 1;
         data.powerMult = 1;
       }
+      if (data.displayW === undefined || data.displayH === undefined) {
+        const bw = body.bounds.max.x - body.bounds.min.x;
+        const bh = body.bounds.max.y - body.bounds.min.y;
+        data.displayW = bw;
+        data.displayH = bh;
+      }
       const k = PUDDING_JIGGLE_SPRING;
       const d = PUDDING_JIGGLE_DAMPING;
       data.jiggleV += (-k * data.jiggleX - d * data.jiggleV) * dtSec;
@@ -692,6 +698,8 @@ export class Game {
       idlePhase: Math.random() * Math.PI * 2,
       stackDepth,
       powerMult,
+      displayW: mergedW,
+      displayH: mergedH,
     };
     merged.plugin.pudding = data;
     merged.plugin.puddingKind = kind;
@@ -1114,6 +1122,8 @@ export class Game {
       idlePhase: Math.random() * Math.PI * 2,
       stackDepth: 1,
       powerMult: 1,
+      displayW: w,
+      displayH: h,
     };
     body.plugin.pudding = data;
     body.plugin.puddingKind = kind;
@@ -1271,8 +1281,12 @@ export class Game {
         if (body.label === LABEL_PUDDING) {
           const kind = body.plugin.puddingKind as BlockKind;
           const data = body.plugin.pudding as PuddingData | undefined;
-          const w = body.bounds.max.x - body.bounds.min.x;
-          const h = body.bounds.max.y - body.bounds.min.y;
+          const w =
+            data?.displayW ??
+            body.bounds.max.x - body.bounds.min.x;
+          const h =
+            data?.displayH ??
+            body.bounds.max.y - body.bounds.min.y;
           const held = this.grabConstraint?.bodyB === body;
           const spd = Matter.Vector.magnitude(body.velocity);
           const av = Math.abs(body.angularVelocity);
@@ -1345,6 +1359,8 @@ export class Game {
             enemyBodies,
             now,
             idleWobble + heldTilt,
+            w,
+            h,
           );
           continue;
         }
@@ -1445,9 +1461,13 @@ export class Game {
     now: number,
     colors: { white: string; rim: string; pupil: string },
     extraAngle = 0,
+    displayW?: number,
+    displayH?: number,
   ): void {
-    const w = self.bounds.max.x - self.bounds.min.x;
-    const h = self.bounds.max.y - self.bounds.min.y;
+    const w =
+      displayW ?? self.bounds.max.x - self.bounds.min.x;
+    const h =
+      displayH ?? self.bounds.max.y - self.bounds.min.y;
     const eyeR = Math.max(4.5, Math.min(8, w * 0.13));
     const pupilR = eyeR * 0.42;
     const maxPupilShift = eyeR - pupilR - 0.8;
@@ -1521,6 +1541,8 @@ export class Game {
     enemies: Matter.Body[],
     now: number,
     extraAngle = 0,
+    displayW?: number,
+    displayH?: number,
   ): void {
     let gazeWorld: Matter.Vector | null = null;
 
@@ -1566,6 +1588,8 @@ export class Game {
         pupil: "#44403c",
       },
       extraAngle,
+      displayW,
+      displayH,
     );
   }
 
