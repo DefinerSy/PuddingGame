@@ -19,6 +19,11 @@ import {
   EYE_BLINK_GAP_MIN_MS,
   GROUND_THICK,
   GROUND_Y,
+  MERGE_ALIGN_MAX_PX,
+  MERGE_MAX_ANGLE_RAD,
+  MERGE_MAX_STACK_DEPTH,
+  MERGE_POWER_BASE,
+  MERGE_VERTICAL_TOUCH_PX,
   PRODUCER_AMOUNT,
   PRODUCER_INTERVAL_MS,
   ROLL_COST_BASE,
@@ -168,6 +173,7 @@ export class Game {
   private defeatFxTriggered = false;
   private defeatParticles: DefeatParticle[] = [];
   private lastDrawTime = performance.now();
+  private mergeQueue: Array<{ bottom: Matter.Body; top: Matter.Body }> = [];
 
   private shopSlots: BlockKind[] = [];
   private shopFilled = false;
@@ -412,6 +418,7 @@ export class Game {
         this.handleSupportLanding(bodyA, bodyB);
         this.handleBulletHit(bodyA, bodyB);
         this.applyPuddingJiggleFromPair(pair);
+        this.queuePerfectMerge(bodyA, bodyB);
       }
     });
 
@@ -472,6 +479,10 @@ export class Game {
         data.jiggleV = 0;
         data.idlePhase = Math.random() * Math.PI * 2;
       }
+      if (data.stackDepth === undefined) {
+        data.stackDepth = 1;
+        data.powerMult = 1;
+      }
       const k = PUDDING_JIGGLE_SPRING;
       const d = PUDDING_JIGGLE_DAMPING;
       data.jiggleV += (-k * data.jiggleX - d * data.jiggleV) * dtSec;
@@ -509,6 +520,135 @@ export class Game {
       this.updateHud();
     }
     Composite.remove(this.world, p);
+  }
+
+  private queuePerfectMerge(a: Matter.Body, b: Matter.Body): void {
+    if (this.gameOver) return;
+    if (a.label !== LABEL_PUDDING || b.label !== LABEL_PUDDING) return;
+    const top = a.position.y <= b.position.y ? a : b;
+    const bottom = top === a ? b : a;
+
+    const da = top.plugin.pudding as PuddingData | undefined;
+    const db = bottom.plugin.pudding as PuddingData | undefined;
+    if (!da || !db || da.kind !== db.kind) return;
+
+    const alignOk =
+      Math.abs(top.position.x - bottom.position.x) <= MERGE_ALIGN_MAX_PX;
+    const angOk =
+      Math.abs(top.angle) <= MERGE_MAX_ANGLE_RAD &&
+      Math.abs(bottom.angle) <= MERGE_MAX_ANGLE_RAD;
+    const overlap = bottom.bounds.max.y - top.bounds.min.y;
+    const vertOk =
+      overlap >= -4 && overlap <= MERGE_VERTICAL_TOUCH_PX;
+
+    if (!alignOk || !angOk || !vertOk) return;
+
+    const dBottom = bottom.plugin.pudding as PuddingData;
+    const dTop = top.plugin.pudding as PuddingData;
+    const sb = dBottom.stackDepth ?? 1;
+    const st = dTop.stackDepth ?? 1;
+    if (sb + st > MERGE_MAX_STACK_DEPTH) return;
+
+    const key =
+      bottom.id < top.id
+        ? `${bottom.id}-${top.id}`
+        : `${top.id}-${bottom.id}`;
+    for (const m of this.mergeQueue) {
+      const k =
+        m.bottom.id < m.top.id
+          ? `${m.bottom.id}-${m.top.id}`
+          : `${m.top.id}-${m.bottom.id}`;
+      if (k === key) return;
+    }
+    this.mergeQueue.push({ bottom, top });
+  }
+
+  private processMergeQueue(): void {
+    while (this.mergeQueue.length > 0) {
+      const { bottom, top } = this.mergeQueue.shift()!;
+      this.tryMergePuddings(bottom, top);
+    }
+  }
+
+  private tryMergePuddings(bottom: Matter.Body, top: Matter.Body): void {
+    if (this.gameOver) return;
+    const bodies = Composite.allBodies(this.world);
+    if (!bodies.includes(bottom) || !bodies.includes(top)) return;
+    if (this.grabConstraint?.bodyB === bottom || this.grabConstraint?.bodyB === top) {
+      return;
+    }
+
+    const db = bottom.plugin.pudding as PuddingData | undefined;
+    const dt = top.plugin.pudding as PuddingData | undefined;
+    if (!db || !dt || db.kind !== dt.kind) return;
+
+    const alignOk =
+      Math.abs(top.position.x - bottom.position.x) <= MERGE_ALIGN_MAX_PX * 1.35;
+    const angOk =
+      Math.abs(top.angle) <= MERGE_MAX_ANGLE_RAD * 1.35 &&
+      Math.abs(bottom.angle) <= MERGE_MAX_ANGLE_RAD * 1.35;
+    const overlap = bottom.bounds.max.y - top.bounds.min.y;
+    const vertOk =
+      overlap >= -8 && overlap <= MERGE_VERTICAL_TOUCH_PX * 1.5;
+    if (top.bounds.min.y > bottom.bounds.max.y + 14) return;
+    if (!alignOk || !angOk || !vertOk) return;
+
+    const sb = db.stackDepth ?? 1;
+    const st = dt.stackDepth ?? 1;
+    if (sb + st > MERGE_MAX_STACK_DEPTH) return;
+
+    const mb = db.powerMult ?? 1;
+    const mt = dt.powerMult ?? 1;
+    const powerMult = MERGE_POWER_BASE * (mb + mt) * 0.5;
+    const stackDepth = sb + st;
+
+    const bw = bottom.bounds.max.x - bottom.bounds.min.x;
+    const tw = top.bounds.max.x - top.bounds.min.x;
+    const mergedW = Math.max(bw, tw);
+    const minY = top.bounds.min.y;
+    const maxY = bottom.bounds.max.y;
+    const mergedH = maxY - minY;
+    const centerX = (top.bounds.min.x + top.bounds.max.x + bottom.bounds.min.x + bottom.bounds.max.x) / 4;
+    const centerY = (minY + maxY) / 2;
+
+    const newMaxHp = db.maxHp + dt.maxHp;
+    const newHp = Math.min(newMaxHp, db.hp + dt.hp);
+
+    const kind = db.kind;
+    Composite.remove(this.world, bottom);
+    Composite.remove(this.world, top);
+
+    const merged = Bodies.rectangle(centerX, centerY, mergedW, mergedH, {
+      chamfer: { radius: 6 },
+      label: LABEL_PUDDING,
+      friction: 0.75,
+      frictionStatic: 0.9,
+      density: kind === "defender" ? 0.008 : 0.004,
+      angle: 0,
+      collisionFilter: {
+        category: CAT_BLOCK,
+        mask: CAT_GROUND | CAT_ENEMY | CAT_BLOCK | CAT_BASE,
+      },
+    });
+
+    const data: PuddingData = {
+      kind,
+      hp: newHp,
+      maxHp: newMaxHp,
+      shootAccumulator: 0,
+      produceAccumulator: 0,
+      jiggleX: 0,
+      jiggleV: 0,
+      idlePhase: Math.random() * Math.PI * 2,
+      stackDepth,
+      powerMult,
+    };
+    merged.plugin.pudding = data;
+    merged.plugin.puddingKind = kind;
+    merged.plugin.mergeFlashUntil = performance.now() + 520;
+    Composite.add(this.world, merged);
+    Body.setVelocity(merged, { x: 0, y: 0 });
+    Body.setAngularVelocity(merged, 0);
   }
 
   private handleBulletHit(a: Matter.Body, b: Matter.Body): void {
@@ -570,13 +710,18 @@ export class Game {
     if (now - last < 450) return;
     this.enemyHitPuddingCooldown.set(key, now);
 
-    data.hp -= ENEMY_DAMAGE_TO_PUDDING;
+    const pm = data.powerMult ?? 1;
+    data.hp -= ENEMY_DAMAGE_TO_PUDDING / pm;
     if (data.hp <= 0) {
       this.detachAndRemovePudding(pud);
     }
   }
 
   private onBeforeUpdate(): void {
+    if (!this.gameOver) {
+      this.processMergeQueue();
+    }
+
     if (this.gameOver) return;
 
     let dx = 0;
@@ -631,19 +776,24 @@ export class Game {
       const data = body.plugin.pudding as PuddingData | undefined;
       if (!data) continue;
 
+      const pm = data.powerMult ?? 1;
+
       if (data.kind === "producer") {
         data.produceAccumulator += dt;
-        if (data.produceAccumulator >= PRODUCER_INTERVAL_MS) {
+        const prodInterval = PRODUCER_INTERVAL_MS / pm;
+        if (data.produceAccumulator >= prodInterval) {
           data.produceAccumulator = 0;
-          this.money += PRODUCER_AMOUNT;
+          const gain = Math.max(1, Math.round(PRODUCER_AMOUNT * pm));
+          this.money += gain;
           this.updateHud();
-          this.showProducerIncomeFx(body);
+          this.showProducerIncomeFx(body, gain);
         }
       }
 
       if (data.kind === "shooter") {
         data.shootAccumulator += dt;
-        if (data.shootAccumulator >= SHOOT_INTERVAL_MS) {
+        const shootEvery = SHOOT_INTERVAL_MS / pm;
+        if (data.shootAccumulator >= shootEvery) {
           data.shootAccumulator = 0;
           this.tryShoot(body, data);
         }
@@ -656,9 +806,10 @@ export class Game {
     return Math.max(0, top);
   }
 
-  private tryShoot(body: Matter.Body, _data: PuddingData): void {
+  private tryShoot(body: Matter.Body, data: PuddingData): void {
+    const pm = data.powerMult ?? 1;
     const range =
-      SHOOT_RANGE_BASE + this.heightBonus(body) * SHOOT_RANGE_PER_HEIGHT;
+      SHOOT_RANGE_BASE * pm + this.heightBonus(body) * SHOOT_RANGE_PER_HEIGHT;
     let best: Matter.Body | null = null;
     let bestD = range + 1;
     const bodies = Composite.allBodies(this.world);
@@ -692,7 +843,7 @@ export class Game {
         },
       },
     );
-    bullet.plugin.bulletDmg = BULLET_DAMAGE;
+    bullet.plugin.bulletDmg = BULLET_DAMAGE * (data.powerMult ?? 1);
     Body.setVelocity(bullet, {
       x: dir.x * 12,
       y: dir.y * 12,
@@ -911,6 +1062,8 @@ export class Game {
       jiggleX: 0,
       jiggleV: 0,
       idlePhase: Math.random() * Math.PI * 2,
+      stackDepth: 1,
+      powerMult: 1,
     };
     body.plugin.pudding = data;
     body.plugin.puddingKind = kind;
@@ -932,16 +1085,16 @@ export class Game {
     pulseElement(this.statCoinsPill, "fx-pulse-money");
   }
 
-  private showProducerIncomeFx(body: Matter.Body): void {
+  private showProducerIncomeFx(body: Matter.Body, amount: number): void {
     if (!this.statCoinsPill) return;
     const { x, y } = gameToScreen(this.canvas, body.position.x, body.position.y - 28);
-    spawnFloatText(this.fxOverlay, x, y, `+${PRODUCER_AMOUNT}`, "fx-producer-pop");
+    spawnFloatText(this.fxOverlay, x, y, `+${amount}`, "fx-producer-pop");
     spawnFlyToElement(
       this.fxOverlay,
       x,
       y - 18,
       this.statCoinsPill,
-      `+${PRODUCER_AMOUNT} 🪙`,
+      `+${amount} 🪙`,
       "fx-fly-producer",
     );
     pulseElement(this.statCoinsPill, "fx-pulse-money");
@@ -1098,6 +1251,30 @@ export class Game {
           ctx.scale(scaleX, scaleY);
           drawPuddingBodyLocal(ctx, w, h, kind);
           ctx.restore();
+
+          const flashUntil = body.plugin.mergeFlashUntil as number | undefined;
+          if (flashUntil && now < flashUntil) {
+            const t = (flashUntil - now) / 520;
+            ctx.save();
+            ctx.translate(body.position.x, body.position.y);
+            ctx.rotate(body.angle);
+            ctx.strokeStyle = `rgba(250, 204, 21, ${0.35 + t * 0.5})`;
+            ctx.lineWidth = 4;
+            ctx.shadowColor = "rgba(250, 204, 21, 0.8)";
+            ctx.shadowBlur = 14;
+            const x = -w / 2 - 3;
+            const y = -h / 2 - 3;
+            ctx.strokeRect(x, y, w + 6, h + 6);
+            ctx.shadowBlur = 0;
+            if ((data?.stackDepth ?? 1) >= 2) {
+              ctx.fillStyle = `rgba(250, 204, 21, ${0.75 * t})`;
+              ctx.font = "bold 13px Nunito, system-ui, sans-serif";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "bottom";
+              ctx.fillText("★ 合体 ★", 0, -h / 2 - 8);
+            }
+            ctx.restore();
+          }
 
           if (data && data.hp < data.maxHp) {
             const barW = Math.min(56, Math.max(28, w - 6));

@@ -92,3 +92,11 @@ export const PUDDING_IDLE_WOBBLE_SPEED = 2.4;
 export const PUDDING_IDLE_WOBBLE_AMP = 0.028;
 /** 被抓取时绳子轻摆（弧度） */
 export const PUDDING_HELD_SWAY_AMP = 0.07;
+
+/** 《都市摩天楼》式完美叠放：同类上下对齐合并为更高一体块 */
+export const MERGE_ALIGN_MAX_PX = 14;
+export const MERGE_MAX_ANGLE_RAD = 0.14;
+export const MERGE_VERTICAL_TOUCH_PX = 18;
+export const MERGE_POWER_BASE = 2.5;
+/** 合并层数上限（由多个单体堆成） */
+export const MERGE_MAX_STACK_DEPTH = 12;
