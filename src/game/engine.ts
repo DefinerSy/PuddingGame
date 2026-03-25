@@ -4,6 +4,13 @@ import {
   BASE_DEFENSE_DAMAGE,
   BASE_DEFENSE_INTERVAL_MS,
   BASE_DEFENSE_RANGE,
+  PUDDING_SLAM_BASE_DAMAGE,
+  PUDDING_SLAM_COOLDOWN_MS,
+  PUDDING_SLAM_DAMAGE_PER_VY,
+  PUDDING_SLAM_DEFENDER_KIND_MUL,
+  PUDDING_SLAM_MAX_CENTER_Y_OVER_ENEMY,
+  PUDDING_SLAM_MIN_DOWNWARD_VY,
+  PUDDING_SLAM_STACK_DEPTH_MUL,
   BASE_UPGRADE_COST_BASE,
   BASE_UPGRADE_COST_PER_LEVEL,
   BASE_UPGRADE_HOOK_LIFT,
@@ -239,6 +246,7 @@ export class Game {
 
   private enemyHitBaseCooldown = new Map<number, number>();
   private enemyHitPuddingCooldown = new Map<string, number>();
+  private puddingSlamEnemyCooldown = new Map<string, number>();
 
   /** 每 5 波宝箱兵从左侧或右侧交替出现 */
   private carrierChestSideLeft = true;
@@ -734,6 +742,7 @@ export class Game {
         this.handleSupportLanding(bodyA, bodyB);
         this.handleChestGroundLanding(bodyA, bodyB);
         this.handleBulletHit(bodyA, bodyB);
+        this.handlePuddingSlamEnemy(bodyA, bodyB);
         this.handleHookChestContact(bodyA, bodyB);
         this.applyPuddingJiggleFromPair(pair);
         this.queuePerfectMerge(bodyA, bodyB);
@@ -758,6 +767,7 @@ export class Game {
           a.label === LABEL_PUDDING ? a : b.label === LABEL_PUDDING ? b : null;
         if (enemy && pud) {
           this.enemyHitPuddingCooldown.delete(`${enemy.id}-${pud.id}`);
+          this.puddingSlamEnemyCooldown.delete(`${pud.id}-${enemy.id}`);
         }
       }
     });
@@ -1094,6 +1104,18 @@ export class Game {
     Body.setAngularVelocity(merged, 0);
   }
 
+  private applyDamageToEnemy(enemy: Matter.Body, dmg: number): void {
+    const data = enemy.plugin.puddingEnemy as EnemyData | undefined;
+    if (!data) return;
+    data.hp -= dmg;
+    if (data.hp <= 0) {
+      if (data.dropsChest) {
+        this.spawnChestAt(enemy.position.x, enemy.position.y - 14);
+      }
+      Composite.remove(this.world, enemy);
+    }
+  }
+
   private handleBulletHit(a: Matter.Body, b: Matter.Body): void {
     const bullet =
       a.label === LABEL_BULLET ? a : b.label === LABEL_BULLET ? b : null;
@@ -1102,16 +1124,57 @@ export class Game {
     if (!bullet || !enemy) return;
 
     Composite.remove(this.world, bullet);
-    const data = enemy.plugin.puddingEnemy as EnemyData | undefined;
-    if (!data) return;
     const dmg = (bullet.plugin.bulletDmg as number) ?? BULLET_DAMAGE;
-    data.hp -= dmg;
-    if (data.hp <= 0) {
-      if (data.dropsChest) {
-        this.spawnChestAt(enemy.position.x, enemy.position.y - 14);
-      }
-      Composite.remove(this.world, enemy);
+    this.applyDamageToEnemy(enemy, dmg);
+  }
+
+  /** 布丁以较快速度下落并压在敌人上方时造成砸击伤害 */
+  private handlePuddingSlamEnemy(a: Matter.Body, b: Matter.Body): void {
+    if (this.gameOver || this.isChestPickOpen()) return;
+    const pud =
+      a.label === LABEL_PUDDING ? a : b.label === LABEL_PUDDING ? b : null;
+    const enemy =
+      a.label === LABEL_ENEMY ? a : b.label === LABEL_ENEMY ? b : null;
+    if (!pud || !enemy) return;
+    if (this.grabConstraint?.bodyB === pud) return;
+
+    const vy = pud.velocity.y;
+    if (vy < PUDDING_SLAM_MIN_DOWNWARD_VY) return;
+
+    if (
+      pud.position.y >
+      enemy.position.y + PUDDING_SLAM_MAX_CENTER_Y_OVER_ENEMY
+    ) {
+      return;
     }
+
+    const pb = pud.bounds;
+    const eb = enemy.bounds;
+    const overlapX =
+      Math.min(pb.max.x, eb.max.x) - Math.max(pb.min.x, eb.min.x);
+    if (overlapX < 4) return;
+
+    const now = performance.now();
+    const key = `${pud.id}-${enemy.id}`;
+    const last = this.puddingSlamEnemyCooldown.get(key) ?? 0;
+    if (now - last < PUDDING_SLAM_COOLDOWN_MS) return;
+    this.puddingSlamEnemyCooldown.set(key, now);
+
+    const pdata = pud.plugin.pudding as PuddingData | undefined;
+    const stackDepth = pdata?.stackDepth ?? 1;
+    const kindMul =
+      pdata?.kind === "defender"
+        ? PUDDING_SLAM_DEFENDER_KIND_MUL
+        : 1;
+    const depthFactor =
+      1 + Math.max(0, stackDepth - 1) * PUDDING_SLAM_STACK_DEPTH_MUL;
+    const extraVy = vy - PUDDING_SLAM_MIN_DOWNWARD_VY;
+    let dmg =
+      (PUDDING_SLAM_BASE_DAMAGE + extraVy * PUDDING_SLAM_DAMAGE_PER_VY) *
+      depthFactor *
+      kindMul;
+    dmg = Math.max(1, Math.round(dmg));
+    this.applyDamageToEnemy(enemy, dmg);
   }
 
   private handleEnemyBase(

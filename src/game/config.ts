@@ -64,6 +64,19 @@ export const BASE_DEFENSE_INTERVAL_MS = 1050;
 export const BASE_DEFENSE_RANGE = 268;
 export const BASE_DEFENSE_DAMAGE = 8;
 
+/**
+ * 布丁落地砸到敌人：需明显向下速度，伤害随速度与层数略增
+ */
+export const PUDDING_SLAM_MIN_DOWNWARD_VY = 2.1;
+export const PUDDING_SLAM_BASE_DAMAGE = 9;
+export const PUDDING_SLAM_DAMAGE_PER_VY = 1.15;
+export const PUDDING_SLAM_STACK_DEPTH_MUL = 0.12;
+export const PUDDING_SLAM_DEFENDER_KIND_MUL = 1.35;
+/** 同一布丁-敌人对连续砸击冷却（毫秒） */
+export const PUDDING_SLAM_COOLDOWN_MS = 520;
+/** 允许「压在头顶」：布丁中心不高于敌人中心超过此像素（y 向下为正） */
+export const PUDDING_SLAM_MAX_CENTER_Y_OVER_ENEMY = 22;
+
 /** 基地升级：每级增加天空高度、吊机更高、敌人生成更远、镜头略拉远 */
 export const BASE_UPGRADE_MAX_LEVEL = 4;
 export const BASE_UPGRADE_COST_BASE = 95;
