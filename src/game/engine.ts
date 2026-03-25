@@ -173,7 +173,7 @@ export class Game {
   private shopFilled = false;
   /** 第一局老虎机必含至少一格射手，避免开局无输出崩盘 */
   private firstRollDone = false;
-  /** 已从当前商店流程中取出的方块数，用于 Roll/取出涨价 */
+  /** 本局累计从商店取出的方块数，Roll/取出涨价持续累加（Roll 不清零） */
   private blocksPurchased = 0;
 
   private enemyHitBaseCooldown = new Map<number, number>();
@@ -840,7 +840,6 @@ export class Game {
     }
     this.shopSlots = [a, b, c];
     this.shopFilled = true;
-    this.blocksPurchased = 0;
     this.updateHud();
   }
 

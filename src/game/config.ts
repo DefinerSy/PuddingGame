@@ -15,7 +15,7 @@ export const CRANE_HOOK_Y = 100;
 export const CRANE_MOVE_SPEED = 5;
 
 /**
- * 经济：开局宽松；每从商店**成功取出**一个方块，Roll/取出基础价各涨一档（有上限）。
+ * 经济：开局宽松；每从商店**成功取出**一个方块，Roll/取出各涨一档（有上限），整局累加、Roll 不清零。
  */
 export const ROLL_COST_BASE = 16;
 export const TAKE_COST_BASE = 8;
