@@ -1,6 +1,6 @@
 import type Matter from "matter-js";
 import type { BlockKind, EnemyKind } from "./types";
-import { GROUND_Y, WIDTH, HEIGHT } from "./config";
+import { WIDTH } from "./config";
 
 export function roundRectPath(
   ctx: CanvasRenderingContext2D,
@@ -23,18 +23,20 @@ export function roundRectPath(
   ctx.closePath();
 }
 
+/** groundY：世界坐标里「草地顶」的 y（可随基地升级下移，天空变高） */
 export function drawSkyAndZones(
   ctx: CanvasRenderingContext2D,
   safeMin: number,
   safeMax: number,
+  groundY: number,
 ): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  const sky = ctx.createLinearGradient(0, 0, 0, groundY);
   sky.addColorStop(0, "#c8e8ff");
   sky.addColorStop(0.45, "#e8f4ff");
   sky.addColorStop(0.85, "#ffeef8");
   sky.addColorStop(1, "#fff5f0");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, WIDTH, GROUND_Y);
+  ctx.fillRect(0, 0, WIDTH, groundY);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
   ctx.beginPath();
@@ -47,21 +49,21 @@ export function drawSkyAndZones(
   ctx.fill();
 
   ctx.fillStyle = "rgba(168, 230, 185, 0.42)";
-  ctx.fillRect(safeMin, 0, safeMax - safeMin, GROUND_Y);
+  ctx.fillRect(safeMin, 0, safeMax - safeMin, groundY);
   ctx.strokeStyle = "rgba(74, 180, 120, 0.55)";
   ctx.lineWidth = 3;
   ctx.setLineDash([10, 8]);
   ctx.beginPath();
   ctx.moveTo(safeMin, 0);
-  ctx.lineTo(safeMin, GROUND_Y);
+  ctx.lineTo(safeMin, groundY);
   ctx.moveTo(safeMax, 0);
-  ctx.lineTo(safeMax, GROUND_Y);
+  ctx.lineTo(safeMax, groundY);
   ctx.stroke();
   ctx.setLineDash([]);
 
   ctx.fillStyle = "rgba(255, 186, 200, 0.28)";
-  ctx.fillRect(0, 0, safeMin, GROUND_Y);
-  ctx.fillRect(safeMax, 0, WIDTH - safeMax, GROUND_Y);
+  ctx.fillRect(0, 0, safeMin, groundY);
+  ctx.fillRect(safeMax, 0, WIDTH - safeMax, groundY);
 }
 
 export function drawGroundCasual(
@@ -396,6 +398,7 @@ export function drawHealthBarPill(
 export function drawGameOverBanner(
   ctx: CanvasRenderingContext2D,
   text: string,
+  worldHeight: number,
 ): void {
   if (!text) return;
   ctx.save();
@@ -403,7 +406,7 @@ export function drawGameOverBanner(
   ctx.font = "600 17px system-ui, 'Segoe UI', sans-serif";
   const tw = ctx.measureText(text).width;
   const bx = 20;
-  const by = HEIGHT - 52;
+  const by = worldHeight - 52;
   const bw = tw + padX * 2;
   const bh = 36;
   const g = ctx.createLinearGradient(bx, by, bx, by + bh);

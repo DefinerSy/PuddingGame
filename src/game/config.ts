@@ -57,6 +57,19 @@ export const ENEMY_DAMAGE = 7;
 export const ENEMY_DAMAGE_TO_PUDDING = 4;
 export const BASE_MAX_HP = 128;
 
+/** 基地升级：每级增加天空高度、吊机更高、敌人生成更远、镜头略拉远 */
+export const BASE_UPGRADE_MAX_LEVEL = 4;
+export const BASE_UPGRADE_COST_BASE = 95;
+export const BASE_UPGRADE_COST_PER_LEVEL = 55;
+/** 每级世界向上扩展的像素（地面与天空整体上移等效：地面 y 下移） */
+export const BASE_UPGRADE_SKY_EXTRA = 110;
+/** 每级吊机挂钩上移 */
+export const BASE_UPGRADE_HOOK_LIFT = 48;
+/** 每级敌人生成距边界的额外距离 */
+export const BASE_UPGRADE_SPAWN_PUSH = 26;
+/** 每级在「适配高度」基础上的额外缩放（<1 拉远） */
+export const BASE_UPGRADE_VIEW_ZOOM_MUL = 0.965;
+
 /**
  * 波次：间隔略拉长；每侧数量每 4 波 +1（比原先每 3 波 +1 更温和）
  * 首波前等待 WAVE_START_DELAY_MS，避免开局尚未摆块就刷怪

@@ -1,6 +1,13 @@
 import Matter from "matter-js";
 import {
   BASE_MAX_HP,
+  BASE_UPGRADE_COST_BASE,
+  BASE_UPGRADE_COST_PER_LEVEL,
+  BASE_UPGRADE_HOOK_LIFT,
+  BASE_UPGRADE_MAX_LEVEL,
+  BASE_UPGRADE_SKY_EXTRA,
+  BASE_UPGRADE_SPAWN_PUSH,
+  BASE_UPGRADE_VIEW_ZOOM_MUL,
   CRANE_HOOK_Y,
   CRANE_MOVE_SPEED,
   CRANE_X_MAX,
@@ -54,6 +61,7 @@ import {
   WAVE_INTERVAL_MS,
   WAVE_START_DELAY_MS,
   WIDTH,
+  HEIGHT,
 } from "./config";
 import {
   createEnemyPluginData,
@@ -66,6 +74,7 @@ import {
   drawBaseCasual,
   drawBulletCasual,
   drawEnemyCasual,
+  drawGameOverBanner,
   drawGroundCasual,
   drawHealthBarPill,
   drawHookCasual,
@@ -188,6 +197,15 @@ export class Game {
   private firstRollDone = false;
   /** 本局累计从商店取出的方块数，Roll/取出涨价持续累加（Roll 不清零） */
   private blocksPurchased = 0;
+  /** 基地升级次数：抬高天空、吊机、拉远镜头、敌人生成更远 */
+  private baseUpgradeLevel = 0;
+  /** 当前世界「草地顶」y（升级后下移，天空变高） */
+  private worldGroundY = GROUND_Y;
+  /** 吊机挂钩 y */
+  private hookY = CRANE_HOOK_Y;
+  private viewScale = 1;
+  private viewOffsetX = 0;
+  private viewOffsetY = 0;
 
   private enemyHitBaseCooldown = new Map<number, number>();
   private enemyHitPuddingCooldown = new Map<string, number>();
@@ -201,6 +219,10 @@ export class Game {
   private btnLeft = document.getElementById("btn-left") as HTMLButtonElement | null;
   private btnRight = document.getElementById("btn-right") as HTMLButtonElement | null;
   private btnGrab = document.getElementById("btn-grab") as HTMLButtonElement | null;
+  private btnBaseUpgrade = document.getElementById(
+    "btn-base-upgrade",
+  ) as HTMLButtonElement | null;
+  private upgradeCostEl = document.getElementById("upgrade-cost")!;
   private fxOverlay =
     document.getElementById("fx-overlay") ?? document.body;
   private gameOverVeil = document.getElementById(
@@ -229,9 +251,11 @@ export class Game {
     this.world = this.engine.world;
     this.engine.gravity.y = 1;
 
+    this.applyViewParams();
+
     this.ground = Bodies.rectangle(
       WIDTH / 2,
-      GROUND_Y + GROUND_THICK / 2,
+      this.worldGroundY + GROUND_THICK / 2,
       WIDTH + 200,
       GROUND_THICK,
       {
@@ -246,13 +270,13 @@ export class Game {
       },
     );
 
-    this.hook = Bodies.circle(this.craneX, CRANE_HOOK_Y, 12, {
+    this.hook = Bodies.circle(this.craneX, this.hookY, 12, {
       isStatic: true,
       label: LABEL_HOOK,
       collisionFilter: { category: CAT_HOOK, mask: 0 },
     });
 
-    this.baseBody = Bodies.rectangle(WIDTH / 2, GROUND_Y - 36, 72, 72, {
+    this.baseBody = Bodies.rectangle(WIDTH / 2, this.worldGroundY - 36, 72, 72, {
       isStatic: true,
       label: LABEL_BASE,
       friction: 0.88,
@@ -280,6 +304,81 @@ export class Game {
     this.loop();
     this.renderShop();
     this.updateHud();
+  }
+
+  private getUpgradeCost(): number {
+    if (this.baseUpgradeLevel >= BASE_UPGRADE_MAX_LEVEL) return 0;
+    return (
+      BASE_UPGRADE_COST_BASE +
+      this.baseUpgradeLevel * BASE_UPGRADE_COST_PER_LEVEL
+    );
+  }
+
+  /** 世界高度随升级变高（画布逻辑高度） */
+  private getWorldHeight(): number {
+    return HEIGHT + this.baseUpgradeLevel * BASE_UPGRADE_SKY_EXTRA;
+  }
+
+  private applyViewParams(): void {
+    const wh = this.getWorldHeight();
+    const fit = HEIGHT / wh;
+    this.viewScale =
+      fit * BASE_UPGRADE_VIEW_ZOOM_MUL ** this.baseUpgradeLevel;
+    this.viewOffsetX = (WIDTH - WIDTH * this.viewScale) / 2;
+    this.viewOffsetY = (HEIGHT - wh * this.viewScale) / 2;
+  }
+
+  /** 扩展天空：地面与基地下移，吊机上移，布丁与敌人整体上移相同 delta */
+  private applyBaseExpand(): void {
+    const delta = BASE_UPGRADE_SKY_EXTRA;
+    this.worldGroundY += delta;
+    this.hookY -= BASE_UPGRADE_HOOK_LIFT;
+
+    Body.setPosition(this.ground, {
+      x: this.ground.position.x,
+      y: this.ground.position.y + delta,
+    });
+    Body.setPosition(this.baseBody, {
+      x: this.baseBody.position.x,
+      y: this.baseBody.position.y + delta,
+    });
+    Body.setPosition(this.hook, { x: this.craneX, y: this.hookY });
+
+    const bodies = Composite.allBodies(this.world);
+    for (const b of bodies) {
+      if (
+        b.label === LABEL_GROUND ||
+        b.label === LABEL_HOOK ||
+        b.label === LABEL_BASE
+      ) {
+        continue;
+      }
+      Body.translate(b, { x: 0, y: -delta });
+    }
+
+    this.applyViewParams();
+  }
+
+  private tryBaseUpgrade(): void {
+    if (this.gameOver) return;
+    if (this.baseUpgradeLevel >= BASE_UPGRADE_MAX_LEVEL) return;
+    const cost = this.getUpgradeCost();
+    if (this.money < cost) return;
+    this.money -= cost;
+    this.baseUpgradeLevel += 1;
+    this.applyBaseExpand();
+    this.updateHud();
+    if (this.statCoinsPill) {
+      const r = this.statCoinsPill.getBoundingClientRect();
+      spawnFloatText(
+        this.fxOverlay,
+        r.left + r.width / 2,
+        r.top + 20,
+        `基地 Lv.${this.baseUpgradeLevel}`,
+        "fx-passive",
+        1400,
+      );
+    }
   }
 
   private bindInput(): void {
@@ -335,8 +434,8 @@ export class Game {
 
   private clientToGameX(clientX: number): number {
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = WIDTH / rect.width;
-    return (clientX - rect.left) * scaleX;
+    const internalX = (clientX - rect.left) * (WIDTH / rect.width);
+    return (internalX - this.viewOffsetX) / this.viewScale;
   }
 
   private bindCanvasPointer(): void {
@@ -364,7 +463,7 @@ export class Game {
         CRANE_X_MAX,
         Math.max(CRANE_X_MIN, next),
       );
-      Body.setPosition(this.hook, { x: this.craneX, y: CRANE_HOOK_Y });
+      Body.setPosition(this.hook, { x: this.craneX, y: this.hookY });
     };
 
     const onUp = (e: PointerEvent) => {
@@ -422,6 +521,7 @@ export class Game {
 
   private bindShop(): void {
     this.btnRoll.addEventListener("click", () => this.rollShop());
+    this.btnBaseUpgrade?.addEventListener("click", () => this.tryBaseUpgrade());
   }
 
   private bindCollisions(): void {
@@ -544,7 +644,7 @@ export class Game {
   /** 防止大刚体旋转时 SAT 迭代不足而穿入地面（用顶点检测，不用 AABB） */
   private clampPuddingsAboveGround(): void {
     if (this.gameOver) return;
-    const groundTop = GROUND_Y;
+    const groundTop = this.worldGroundY;
     const slop = 1.2;
     const bodies = Composite.allBodies(this.world);
     for (const body of bodies) {
@@ -814,7 +914,7 @@ export class Game {
       CRANE_X_MAX,
       Math.max(CRANE_X_MIN, this.craneX + dx),
     );
-    Body.setPosition(this.hook, { x: this.craneX, y: CRANE_HOOK_Y });
+    Body.setPosition(this.hook, { x: this.craneX, y: this.hookY });
 
     const dt = 1000 / 60;
     this.tickPassiveIncome(dt);
@@ -869,7 +969,7 @@ export class Game {
   }
 
   private heightBonus(body: Matter.Body): number {
-    const top = GROUND_Y - body.bounds.max.y;
+    const top = this.worldGroundY - body.bounds.max.y;
     return Math.max(0, top);
   }
 
@@ -940,9 +1040,10 @@ export class Game {
     const n =
       ENEMIES_PER_SIDE_BASE +
       Math.floor(this.wave / ENEMIES_COUNT_SCALE_EVERY);
+    const push = this.baseUpgradeLevel * BASE_UPGRADE_SPAWN_PUSH;
     for (let i = 0; i < n; i++) {
-      this.spawnEnemy(40 + i * 18, true);
-      this.spawnEnemy(WIDTH - 40 - i * 18, false);
+      this.spawnEnemy(40 + push + i * 18, true);
+      this.spawnEnemy(WIDTH - 40 - push - i * 18, false);
     }
     this.updateHud();
   }
@@ -950,7 +1051,7 @@ export class Game {
   private spawnEnemy(x: number, fromLeft: boolean): void {
     const kind = pickEnemyKind(this.wave);
     const def = ENEMY_KIND_DEFS[kind];
-    const cy = enemySpawnCenterY(GROUND_Y, def.h);
+    const cy = enemySpawnCenterY(this.worldGroundY, def.h);
     const body = Bodies.rectangle(x, cy, def.w, def.h, {
       label: LABEL_ENEMY,
       frictionAir: def.frictionAir,
@@ -1083,7 +1184,7 @@ export class Game {
       this.shopFilled = false;
     }
 
-    const body = this.createPuddingBody(kind, this.craneX, CRANE_HOOK_Y + 120);
+    const body = this.createPuddingBody(kind, this.craneX, this.hookY + 120);
     Composite.add(this.world, body);
     this.heldBody = body;
     this.grabConstraint = Constraint.create({
@@ -1161,7 +1262,17 @@ export class Game {
 
   private showProducerIncomeFx(body: Matter.Body, amount: number): void {
     if (!this.statCoinsPill) return;
-    const { x, y } = gameToScreen(this.canvas, body.position.x, body.position.y - 28);
+    const { x, y } = gameToScreen(
+      this.canvas,
+      body.position.x,
+      body.position.y - 28,
+      {
+        viewScale: this.viewScale,
+        viewOffsetX: this.viewOffsetX,
+        viewOffsetY: this.viewOffsetY,
+        worldHeight: this.getWorldHeight(),
+      },
+    );
     spawnFloatText(this.fxOverlay, x, y, `+${amount}`, "fx-producer-pop");
     spawnFlyToElement(
       this.fxOverlay,
@@ -1222,6 +1333,18 @@ export class Game {
     }`;
     this.rollCostEl.textContent = `-${this.getRollCost()}`;
     this.btnRoll.disabled = this.gameOver || this.money < this.getRollCost();
+    const maxLv = BASE_UPGRADE_MAX_LEVEL;
+    if (this.baseUpgradeLevel >= maxLv) {
+      this.upgradeCostEl.textContent = `已满 Lv.${maxLv}`;
+    } else {
+      this.upgradeCostEl.textContent = `-${this.getUpgradeCost()}`;
+    }
+    if (this.btnBaseUpgrade) {
+      this.btnBaseUpgrade.disabled =
+        this.gameOver ||
+        this.baseUpgradeLevel >= maxLv ||
+        this.money < this.getUpgradeCost();
+    }
     /** 始终刷新商店 DOM：有货时同步按钮与价格；清空时移除残留格子（曾仅在 shopFilled 时 render 导致剩一格不消失） */
     this.renderShop();
   }
@@ -1273,9 +1396,14 @@ export class Game {
     this.lastDrawTime = now;
 
     const ctx = this.ctx;
+    const wh = this.getWorldHeight();
     const safeMin = this.craneX - SAFE_HALF_WIDTH;
     const safeMax = this.craneX + SAFE_HALF_WIDTH;
-    drawSkyAndZones(ctx, safeMin, safeMax);
+
+    ctx.save();
+    ctx.setTransform(this.viewScale, 0, 0, this.viewScale, this.viewOffsetX, this.viewOffsetY);
+
+    drawSkyAndZones(ctx, safeMin, safeMax, this.worldGroundY);
 
     const bodies = Composite.allBodies(this.world);
     const puddingBodies = bodies.filter((b) => b.label === LABEL_PUDDING);
@@ -1422,6 +1550,14 @@ export class Game {
     drawHookCasual(ctx, this.hook.position.x, this.hook.position.y);
 
     this.tickAndDrawDefeatParticles(ctx, dtDraw);
+
+    drawGameOverBanner(
+      ctx,
+      this.gameOver ? "基地被攻破 — 刷新页面重开" : "",
+      wh,
+    );
+
+    ctx.restore();
   }
 
   private tickAndDrawDefeatParticles(
@@ -1630,7 +1766,7 @@ export class Game {
       }
     }
     if (!gazeWorld) {
-      gazeWorld = { x: WIDTH / 2, y: GROUND_Y - 36 };
+      gazeWorld = { x: WIDTH / 2, y: this.worldGroundY - 36 };
     }
 
     this.drawCharacterEyes(

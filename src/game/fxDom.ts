@@ -2,17 +2,33 @@
 
 import { HEIGHT, WIDTH } from "./config";
 
+export interface GameViewToScreenOpts {
+  viewScale: number;
+  viewOffsetX: number;
+  viewOffsetY: number;
+  worldHeight: number;
+}
+
 export function gameToScreen(
   canvas: HTMLCanvasElement,
   gameX: number,
   gameY: number,
+  view?: GameViewToScreenOpts,
 ): { x: number; y: number } {
   const r = canvas.getBoundingClientRect();
+  let ix = gameX;
+  let iy = gameY;
+  let drawH = HEIGHT;
+  if (view) {
+    ix = gameX * view.viewScale + view.viewOffsetX;
+    iy = gameY * view.viewScale + view.viewOffsetY;
+    drawH = view.worldHeight;
+  }
   const sx = r.width / WIDTH;
-  const sy = r.height / HEIGHT;
+  const sy = r.height / drawH;
   return {
-    x: r.left + gameX * sx,
-    y: r.top + gameY * sy,
+    x: r.left + ix * sx,
+    y: r.top + iy * sy,
   };
 }
 

@@ -349,6 +349,16 @@ body.game-over-shake {
   border: 3px solid #fff8;
 }
 
+.btn-upgrade {
+  background: linear-gradient(180deg, #ddd6fe, #a78bfa);
+  border: 3px solid #fff8;
+  color: #3b0764;
+}
+
+.shop-upgrade {
+  min-width: 100px;
+}
+
 .btn-take {
   width: 100%;
   margin-top: 4px;
