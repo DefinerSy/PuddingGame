@@ -22,6 +22,7 @@ import {
   SHOOT_INTERVAL_MS,
   SHOOT_RANGE_BASE,
   SHOOT_RANGE_PER_HEIGHT,
+  PASSIVE_INCOME_PER_MINUTE,
   START_MONEY,
   TAKE_COST,
   WAVE_INTERVAL_MS,
@@ -81,6 +82,7 @@ export class Game {
   private heldBody: Matter.Body | null = null;
 
   private money = START_MONEY;
+  private passiveIncomeFrac = 0;
   private baseHp = BASE_MAX_HP;
   private wave = 0;
   private waveTimer = WAVE_INTERVAL_MS - 4000;
@@ -425,10 +427,21 @@ export class Game {
     Body.setPosition(this.hook, { x: this.craneX, y: CRANE_HOOK_Y });
 
     const dt = 1000 / 60;
+    this.tickPassiveIncome(dt);
     this.tickPuddings(dt);
     this.tickEnemies();
     this.tickWaves(dt);
     this.tickBullets();
+  }
+
+  private tickPassiveIncome(dt: number): void {
+    if (this.gameOver || PASSIVE_INCOME_PER_MINUTE <= 0) return;
+    this.passiveIncomeFrac += (PASSIVE_INCOME_PER_MINUTE / 60_000) * dt;
+    const whole = Math.floor(this.passiveIncomeFrac);
+    if (whole <= 0) return;
+    this.passiveIncomeFrac -= whole;
+    this.money += whole;
+    this.updateHud();
   }
 
   private tickPuddings(dt: number): void {

@@ -20,6 +20,9 @@ export const REFRESH_COST = 5;
 
 export const START_MONEY = 40;
 
+/** 全局被动产费：与生产者无关，按真实时间每分钟增加的费用（整数结算） */
+export const PASSIVE_INCOME_PER_MINUTE = 24;
+
 export const SHOOT_INTERVAL_MS = 900;
 export const SHOOT_RANGE_BASE = 180;
 export const SHOOT_RANGE_PER_HEIGHT = 1.2;
