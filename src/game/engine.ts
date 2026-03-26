@@ -126,7 +126,16 @@ import {
   spawnFlyToElement,
 } from "./fxDom";
 
-const { Engine, Bodies, Body, Events, Composite, Constraint, Runner } = Matter;
+const {
+  Engine,
+  Bodies,
+  Body,
+  Events,
+  Composite,
+  Constraint,
+  Runner,
+  Sleeping,
+} = Matter;
 
 interface DefeatParticle {
   x: number;
@@ -913,12 +922,25 @@ export class Game {
     }
   }
 
+  /**
+   * 堆叠静止后会进入休眠；底下块被啃掉时，上面的块仍休眠就不会下落。
+   */
+  private wakeAllPuddings(): void {
+    for (const body of Composite.allBodies(this.world)) {
+      if (body.label !== LABEL_PUDDING || body.isStatic) continue;
+      if (body.isSleeping) {
+        Sleeping.set(body, false);
+      }
+    }
+  }
+
   private detachAndRemovePudding(p: Matter.Body): void {
     if (this.grabConstraint?.bodyB === p) {
       this.releaseGrab();
       this.updateHud();
     }
     Composite.remove(this.world, p);
+    this.wakeAllPuddings();
   }
 
   /** 防止大刚体旋转时 SAT 迭代不足而穿入地面（用顶点检测，不用 AABB） */
