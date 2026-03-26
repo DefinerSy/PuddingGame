@@ -23,20 +23,25 @@ export function roundRectPath(
   ctx.closePath();
 }
 
-/** groundY：世界坐标里「草地顶」的 y（可随基地升级下移，天空变高） */
+/**
+ * groundY：草地顶 y；worldHeight：镜头使用的逻辑世界高度（≥ groundY），
+ * 须与 getWorldHeight 一致，否则缩放后下方会露出未绘制的空白条。
+ */
 export function drawSkyAndZones(
   ctx: CanvasRenderingContext2D,
   safeMin: number,
   safeMax: number,
   groundY: number,
+  worldHeight: number,
 ): void {
+  const h = Math.max(groundY, worldHeight);
   const sky = ctx.createLinearGradient(0, 0, 0, groundY);
   sky.addColorStop(0, "#c8e8ff");
   sky.addColorStop(0.45, "#e8f4ff");
   sky.addColorStop(0.85, "#ffeef8");
   sky.addColorStop(1, "#fff5f0");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, WIDTH, groundY);
+  ctx.fillRect(0, 0, WIDTH, h);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
   ctx.beginPath();
@@ -49,21 +54,21 @@ export function drawSkyAndZones(
   ctx.fill();
 
   ctx.fillStyle = "rgba(168, 230, 185, 0.42)";
-  ctx.fillRect(safeMin, 0, safeMax - safeMin, groundY);
+  ctx.fillRect(safeMin, 0, safeMax - safeMin, h);
   ctx.strokeStyle = "rgba(74, 180, 120, 0.55)";
   ctx.lineWidth = 3;
   ctx.setLineDash([10, 8]);
   ctx.beginPath();
   ctx.moveTo(safeMin, 0);
-  ctx.lineTo(safeMin, groundY);
+  ctx.lineTo(safeMin, h);
   ctx.moveTo(safeMax, 0);
-  ctx.lineTo(safeMax, groundY);
+  ctx.lineTo(safeMax, h);
   ctx.stroke();
   ctx.setLineDash([]);
 
   ctx.fillStyle = "rgba(255, 186, 200, 0.28)";
-  ctx.fillRect(0, 0, safeMin, groundY);
-  ctx.fillRect(safeMax, 0, WIDTH - safeMax, groundY);
+  ctx.fillRect(0, 0, safeMin, h);
+  ctx.fillRect(safeMax, 0, WIDTH - safeMax, h);
 }
 
 export function drawGroundCasual(

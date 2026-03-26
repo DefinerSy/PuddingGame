@@ -13,6 +13,7 @@ import {
   PUDDING_SLAM_STACK_DEPTH_MUL,
   BASE_UPGRADE_COST_BASE,
   BASE_UPGRADE_COST_PER_LEVEL,
+  BASE_UPGRADE_HOOK_LIFT,
   BASE_UPGRADE_MAX_LEVEL,
   BASE_UPGRADE_SKY_EXTRA,
   BASE_UPGRADE_SPAWN_PUSH,
@@ -390,10 +391,12 @@ export class Game {
   }
 
   /**
-   * 基地升级：只改镜头缩放/偏移与敌人生成距离，**不移动**任何物理体，
-   * 避免方块瞬间悬空再塌落。
+   * 基地升级：镜头拉远 + 仅吊钩上移（抓取起点更高），**不移动**地面/基地/方块，
+   * 避免堆叠瞬移塌落。
    */
   private applyBaseExpand(): void {
+    this.hookY -= BASE_UPGRADE_HOOK_LIFT;
+    Body.setPosition(this.hook, { x: this.craneX, y: this.hookY });
     this.applyViewParams();
   }
 
@@ -1926,7 +1929,7 @@ export class Game {
     ctx.save();
     ctx.setTransform(this.viewScale, 0, 0, this.viewScale, this.viewOffsetX, this.viewOffsetY);
 
-    drawSkyAndZones(ctx, safeMin, safeMax, this.worldGroundY);
+    drawSkyAndZones(ctx, safeMin, safeMax, this.worldGroundY, wh);
 
     const bodies = Composite.allBodies(this.world);
     const puddingBodies = bodies.filter((b) => b.label === LABEL_PUDDING);
